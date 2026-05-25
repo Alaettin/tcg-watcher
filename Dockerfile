@@ -2,7 +2,7 @@
 # Playwright. Heavier than node:22-alpine (~1.2GB final) but mandatory for the
 # Playwright-based shop adapters (mediamarkt/saturn/thalia/galaxus/wix/oxid/
 # alternate/toysforfun). Pin to v1.49 to match the playwright npm dep.
-FROM mcr.microsoft.com/playwright:v1.49.0-jammy AS builder
+FROM mcr.microsoft.com/playwright:v1.60.0-jammy AS builder
 
 WORKDIR /app
 
@@ -24,7 +24,7 @@ RUN cd web && npm install --no-audit --no-fund
 COPY web ./web
 RUN cd web && npx vite build
 
-FROM mcr.microsoft.com/playwright:v1.49.0-jammy AS runtime
+FROM mcr.microsoft.com/playwright:v1.60.0-jammy AS runtime
 
 WORKDIR /app
 
