@@ -1,0 +1,14 @@
+node_modules
+dist
+data
+.env
+.env.local
+.git
+.gitignore
+*.log
+playwright/.cache
+playwright-report
+test-results
+README.md
+start.bat
+docker-compose.yml

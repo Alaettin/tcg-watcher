@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: pokemon-watcher-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: pokemon-watcher-redis
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    image: pokemon-watcher:latest
+    container_name: pokemon-watcher-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      REDIS_URL: redis://redis:6379
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FILE: /app/data/events.log
+      NTFY_SERVER: ${NTFY_SERVER:-https://ntfy.sh}
+      NTFY_TOPIC: ${NTFY_TOPIC:?set NTFY_TOPIC in .env}
+      WEB_PORT: ${WEB_PORT:-3000}
+      WEB_USERNAME: ${WEB_USERNAME:-admin}
+      WEB_PASSWORD: ${WEB_PASSWORD:?set WEB_PASSWORD in .env}
+    ports:
+      - "${WEB_PORT:-3000}:${WEB_PORT:-3000}"
+    volumes:
+      - appdata:/app/data
+
+volumes:
+  pgdata:
+  redisdata:
+  appdata:

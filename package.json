@@ -1,0 +1,68 @@
+{
+  "name": "tcg-watcher",
+  "version": "0.2.0",
+  "description": "Self-hosted Pokémon TCG deal & restock watcher. Scrapes 20+ DE/EU shops, matches sealed-set listings, pushes NEW_LISTING/RESTOCK/PRICE_DROP events to ntfy.sh. WebApp UI for set management, live dashboard, multi-channel push.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "author": "Alaettin <alaettin87@gmail.com>",
+  "homepage": "https://github.com/Alaettin/TCG-Watcher",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Alaettin/TCG-Watcher.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Alaettin/TCG-Watcher/issues"
+  },
+  "keywords": [
+    "pokemon",
+    "tcg",
+    "trading-card-game",
+    "deal-tracker",
+    "restock-monitor",
+    "ntfy",
+    "scraper",
+    "playwright",
+    "self-hosted"
+  ],
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "dev:web": "npm --prefix web run dev",
+    "start": "node dist/index.js",
+    "scheduler": "tsx src/index.ts",
+    "run:once": "tsx src/index.ts once",
+    "build": "tsc && npm --prefix web run build",
+    "build:server": "tsc",
+    "build:web": "npm --prefix web run build",
+    "typecheck": "tsc --noEmit",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "axios": "^1.7.7",
+    "bullmq": "^5.21.2",
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1",
+    "ioredis": "^5.4.1",
+    "pino": "^9.5.0",
+    "pino-pretty": "^11.3.0",
+    "pino-roll": "^2.1.0",
+    "playwright": "^1.49.0",
+    "playwright-extra": "^4.3.6",
+    "prisma": "^5.22.0",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.9.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

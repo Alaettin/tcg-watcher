@@ -1,0 +1,157 @@
+[
+  {
+    "id": "pokemon-day-2026-collection",
+    "displayName": "Pokémon Day 2026 Collection (Pikachu Promo + Münze + 3 Booster)",
+    "category": "collection",
+    "expectedReleaseDate": "2026-01-30",
+    "uvpEur": 24.99,
+    "uvpToleranceEur": 5,
+    "searchTerms": [
+      "Pokemon Day 2026 Collection",
+      "Pokémon Day 2026",
+      "Pokemon Day Pikachu Promo 2026",
+      "Pokemon Day 2026 Pin Collection"
+    ],
+    "negativeTerms": ["Sleeve", "Münze", "Einzelkarte", "Promo", "Sticker", "leer"],
+    "ean": null,
+    "minResalePriceEur": null
+  },
+  {
+    "id": "first-partner-collection-s1",
+    "displayName": "First Partner Illustration Collection Serie 1 (Kanto/Hoenn/Sinnoh)",
+    "category": "collection",
+    "expectedReleaseDate": "2026-03-30",
+    "uvpEur": 34.99,
+    "uvpToleranceEur": 5,
+    "searchTerms": [
+      "First Partner Illustration Collection",
+      "Erste Partner Illustrations-Kollektion Serie 1",
+      "First Partner Kanto Hoenn Sinnoh",
+      "Erste Partner Serie 1"
+    ],
+    "negativeTerms": ["Sleeve", "Münze", "Einzelkarte", "Promo", "Sticker", "leer", "Serie 2", "Serie 3"],
+    "ean": null,
+    "minResalePriceEur": null
+  },
+  {
+    "id": "first-partner-collection-s2",
+    "displayName": "Erste Partner Illustrations-Kollektion Serie 2 (Johto/Einall/Galar)",
+    "category": "collection",
+    "expectedReleaseDate": "2026-06-19",
+    "uvpEur": 34.99,
+    "uvpToleranceEur": 5,
+    "searchTerms": [
+      "First Partner Illustration Collection Series 2",
+      "Erste Partner Illustrations-Kollektion Serie 2",
+      "First Partner Johto Einall Galar",
+      "First Partner Series 2 2026",
+      "Erste Partner Serie 2"
+    ],
+    "negativeTerms": ["Sleeve", "Münze", "Einzelkarte", "Promo", "Sticker", "leer", "Serie 1", "Serie 3"],
+    "ean": null,
+    "minResalePriceEur": null
+  },
+  {
+    "id": "30th-celebration-display-de",
+    "displayName": "30th Celebration Booster Display DE",
+    "category": "display",
+    "expectedReleaseDate": "2026-09-16",
+    "uvpEur": 159.99,
+    "uvpToleranceEur": 10,
+    "searchTerms": [
+      "30th Celebration Display",
+      "30th Anniversary Display",
+      "30 Jahre Pokemon Display",
+      "Jubiläum Display Pokemon",
+      "Mega Expansion Pack 30th"
+    ],
+    "negativeTerms": ["Sleeve", "Münze", "Einzelkarte", "Promo", "Sticker", "leer", "Booster Pack einzeln"],
+    "ean": null,
+    "minResalePriceEur": null
+  },
+  {
+    "id": "30th-celebration-booster-de",
+    "displayName": "30th Celebration Einzelbooster DE",
+    "category": "booster",
+    "expectedReleaseDate": "2026-09-16",
+    "uvpEur": 4.99,
+    "uvpToleranceEur": 2,
+    "searchTerms": [
+      "30th Celebration Booster",
+      "30 Jahre Pokemon Booster",
+      "30th Anniversary Booster Pack",
+      "Jubiläum Booster Pokemon"
+    ],
+    "negativeTerms": ["Sleeve", "Münze", "Einzelkarte", "Promo", "Sticker", "Display"],
+    "ean": null,
+    "minResalePriceEur": null
+  },
+  {
+    "id": "30th-celebration-etb-de",
+    "displayName": "30th Celebration Elite Trainer Box DE (vermutet)",
+    "category": "etb",
+    "expectedReleaseDate": "2026-09-16",
+    "uvpEur": 49.99,
+    "uvpToleranceEur": 10,
+    "searchTerms": [
+      "30th Celebration Elite Trainer Box",
+      "30th Celebration ETB",
+      "30 Jahre Pokemon Elite Trainer Box",
+      "Jubiläum Elite Trainer Box"
+    ],
+    "negativeTerms": ["Sleeve", "Münze", "Einzelkarte", "Promo", "Sticker", "leer", "Display"],
+    "ean": null,
+    "minResalePriceEur": null
+  },
+  {
+    "id": "30th-celebration-premium-deck-espeon-umbreon",
+    "displayName": "Premium Deck Set Espeon & Umbreon",
+    "category": "deck",
+    "expectedReleaseDate": "2026-09-16",
+    "uvpEur": null,
+    "uvpToleranceEur": 10,
+    "searchTerms": [
+      "Premium Deck Espeon Umbreon",
+      "Premium Deck Set Espeon",
+      "Espeon Umbreon Deck 30th",
+      "Pokemon Premium Deck Nachtara Psiana"
+    ],
+    "negativeTerms": ["Sleeve", "Münze", "Einzelkarte", "Promo", "Sticker", "leer"],
+    "ean": null,
+    "minResalePriceEur": null
+  },
+  {
+    "id": "first-partner-collection-s3",
+    "displayName": "First Partner Illustration Collection Serie 3",
+    "category": "collection",
+    "expectedReleaseDate": "2026-11-01",
+    "uvpEur": 34.99,
+    "uvpToleranceEur": 5,
+    "searchTerms": [
+      "First Partner Illustration Collection Series 3",
+      "Erste Partner Illustrations-Kollektion Serie 3",
+      "First Partner Series 3 2026",
+      "Erste Partner Serie 3"
+    ],
+    "negativeTerms": ["Sleeve", "Münze", "Einzelkarte", "Promo", "Sticker", "leer", "Serie 1", "Serie 2"],
+    "ean": null,
+    "minResalePriceEur": null
+  },
+  {
+    "id": "30th-celebration-card-sets",
+    "displayName": "30th Celebration Card Sets",
+    "category": "collection",
+    "expectedReleaseDate": "2026-10-16",
+    "uvpEur": null,
+    "uvpToleranceEur": 10,
+    "searchTerms": [
+      "30th Celebration Card Set",
+      "30 Jahre Pokemon Card Set",
+      "30th Anniversary Card Set",
+      "Jubiläum Card Set Pokemon"
+    ],
+    "negativeTerms": ["Sleeve", "Münze", "Einzelkarte", "Promo", "Sticker", "Display", "Booster"],
+    "ean": null,
+    "minResalePriceEur": null
+  }
+]

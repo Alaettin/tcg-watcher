@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.local
+.env.prod
+.env.*.local
+
+# Runtime data + logs (volumes, push state, scraper logs)
+data/
+*.log
+
+# Playwright
+playwright/.cache/
+playwright-report/
+test-results/
+
+# Prisma local dev DBs
+prisma/*.db
+prisma/*.db-journal
+
+# IDE
+.DS_Store
+.vscode/
+.idea/

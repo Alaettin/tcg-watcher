@@ -1,0 +1,420 @@
+[
+  {
+    "id": "kp01-karmesin-purpur",
+    "name": "Karmesin & Purpur (Basisset)",
+    "shortCode": "KP01",
+    "description": "Basisset der Karmesin & Purpur Ära. Einführung der ex-Mechanik und Tera-Pokémon.",
+    "releaseDate": "2023-03-31",
+    "language": "DE",
+    "era": "Karmesin & Purpur",
+    "searchTerms": [
+      "Karmesin Purpur Basis",
+      "Karmesin & Purpur",
+      "Scarlet Violet Base",
+      "Scarlet & Violet Basisset",
+      "KP01",
+      "SV01"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer"],
+    "variants": [
+      { "kind": "display", "displayName": "Booster Display 36", "uvpEur": 149.99 },
+      { "kind": "etb", "displayName": "Top Trainer Box", "uvpEur": 49.99 },
+      { "kind": "premium-collection", "displayName": "Premium-Kollektion", "uvpEur": 39.99 },
+      { "kind": "tin", "displayName": "Tin Box", "uvpEur": 24.99 },
+      { "kind": "blister", "displayName": "3-Pack-Blister", "uvpEur": 11.99 }
+    ]
+  },
+  {
+    "id": "kp02-paldea-evolved",
+    "name": "Paldea Evolved",
+    "shortCode": "KP02",
+    "description": "Zweite Erweiterung der Karmesin & Purpur Ära. Erweitert das Paldea-Pokémon-Repertoire.",
+    "releaseDate": "2023-06-09",
+    "language": "DE",
+    "era": "Karmesin & Purpur",
+    "searchTerms": [
+      "Paldea Evolved",
+      "Paldeas Aufstieg",
+      "Paldea Entwickelt",
+      "KP02",
+      "SV02"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer"],
+    "variants": [
+      { "kind": "display", "displayName": "Booster Display 36", "uvpEur": 149.99 },
+      { "kind": "etb", "displayName": "Top Trainer Box", "uvpEur": 49.99 },
+      { "kind": "premium-collection", "displayName": "Premium-Kollektion", "uvpEur": 39.99 },
+      { "kind": "tin", "displayName": "Tin Box", "uvpEur": 24.99 },
+      { "kind": "blister", "displayName": "3-Pack-Blister", "uvpEur": 11.99 }
+    ]
+  },
+  {
+    "id": "kp03-obsidianflammen",
+    "name": "Obsidianflammen",
+    "shortCode": "KP03",
+    "description": "Charizard-fokussiertes Set mit starken ex-Karten.",
+    "releaseDate": "2023-08-11",
+    "language": "DE",
+    "era": "Karmesin & Purpur",
+    "searchTerms": [
+      "Obsidianflammen",
+      "Obsidian Flammen",
+      "Obsidian Flames",
+      "KP03",
+      "SV03"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer"],
+    "variants": [
+      { "kind": "display", "displayName": "Booster Display 36", "uvpEur": 149.99 },
+      { "kind": "etb", "displayName": "Top Trainer Box", "uvpEur": 49.99 },
+      { "kind": "premium-collection", "displayName": "Premium-Kollektion", "uvpEur": 39.99 },
+      { "kind": "tin", "displayName": "Tin Box", "uvpEur": 24.99 },
+      { "kind": "blister", "displayName": "3-Pack-Blister", "uvpEur": 11.99 }
+    ]
+  },
+  {
+    "id": "kp35-151",
+    "name": "151",
+    "shortCode": "KP3.5",
+    "description": "Spezial-Set mit allen 151 Kanto-Pokémon. Beliebtestes K&P-Set, vielfach ausverkauft.",
+    "releaseDate": "2023-09-22",
+    "language": "DE",
+    "era": "Karmesin & Purpur",
+    "searchTerms": [
+      "Karmesin Purpur 151",
+      "Pokemon 151",
+      "SV151",
+      "KP3.5",
+      "Scarlet Violet 151"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer"],
+    "variants": [
+      { "kind": "display", "displayName": "Booster Bundle Display", "uvpEur": 159.99 },
+      { "kind": "etb", "displayName": "Ultra-Premium-Kollektion", "uvpEur": 99.99 },
+      { "kind": "premium-collection", "displayName": "Alakazam ex Premium", "uvpEur": 39.99 },
+      { "kind": "tin", "displayName": "Mini-Tin", "uvpEur": 14.99 },
+      { "kind": "bundle", "displayName": "Booster Bundle (6 Booster)", "uvpEur": 26.99 }
+    ]
+  },
+  {
+    "id": "kp04-paradoxrift",
+    "name": "Paradoxrift",
+    "shortCode": "KP04",
+    "description": "Vergangenheit-/Zukunft-Paradox-Pokémon kommen ins TCG.",
+    "releaseDate": "2023-11-03",
+    "language": "DE",
+    "era": "Karmesin & Purpur",
+    "searchTerms": [
+      "Paradoxrift",
+      "Paradox Rift",
+      "KP04",
+      "SV04"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer"],
+    "variants": [
+      { "kind": "display", "displayName": "Booster Display 36", "uvpEur": 149.99 },
+      { "kind": "etb", "displayName": "Top Trainer Box", "uvpEur": 49.99 },
+      { "kind": "premium-collection", "displayName": "Premium-Kollektion", "uvpEur": 39.99 },
+      { "kind": "tin", "displayName": "Tin Box", "uvpEur": 24.99 },
+      { "kind": "blister", "displayName": "3-Pack-Blister", "uvpEur": 11.99 }
+    ]
+  },
+  {
+    "id": "kp45-paldeas-schicksale",
+    "name": "Paldeas Schicksale",
+    "shortCode": "KP4.5",
+    "description": "Spezial-Set mit Shinies. Hohe Sammlernachfrage.",
+    "releaseDate": "2024-01-26",
+    "language": "DE",
+    "era": "Karmesin & Purpur",
+    "searchTerms": [
+      "Paldeas Schicksale",
+      "Paldean Fates",
+      "KP4.5",
+      "SV4.5"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer"],
+    "variants": [
+      { "kind": "display", "displayName": "Booster Bundle Display", "uvpEur": 159.99 },
+      { "kind": "etb", "displayName": "Elite Trainer Box", "uvpEur": 54.99 },
+      { "kind": "premium-collection", "displayName": "Premium-Kollektion", "uvpEur": 49.99 },
+      { "kind": "tin", "displayName": "Mini-Tin", "uvpEur": 14.99 }
+    ]
+  },
+  {
+    "id": "kp05-gewalten-der-zeit",
+    "name": "Gewalten der Zeit",
+    "shortCode": "KP05",
+    "description": "Reisende Paradox-Pokémon und Walking Wake/Raging Bolt ex.",
+    "releaseDate": "2024-03-22",
+    "language": "DE",
+    "era": "Karmesin & Purpur",
+    "searchTerms": [
+      "Gewalten der Zeit",
+      "Temporal Forces",
+      "KP05",
+      "SV05"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer"],
+    "variants": [
+      { "kind": "display", "displayName": "Booster Display 36", "uvpEur": 149.99 },
+      { "kind": "etb", "displayName": "Top Trainer Box", "uvpEur": 49.99 },
+      { "kind": "premium-collection", "displayName": "Premium-Kollektion", "uvpEur": 39.99 },
+      { "kind": "tin", "displayName": "Tin Box", "uvpEur": 24.99 },
+      { "kind": "blister", "displayName": "3-Pack-Blister", "uvpEur": 11.99 }
+    ]
+  },
+  {
+    "id": "kp06-maskerade-im-zwielicht",
+    "name": "Maskerade im Zwielicht",
+    "shortCode": "KP06",
+    "description": "Ogerpon und die Ahnen-Pokémon der Teal-Mask-DLC.",
+    "releaseDate": "2024-05-24",
+    "language": "DE",
+    "era": "Karmesin & Purpur",
+    "searchTerms": [
+      "Maskerade im Zwielicht",
+      "Twilight Masquerade",
+      "KP06",
+      "SV06"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer"],
+    "variants": [
+      { "kind": "display", "displayName": "Booster Display 36", "uvpEur": 149.99 },
+      { "kind": "etb", "displayName": "Top Trainer Box", "uvpEur": 49.99 },
+      { "kind": "premium-collection", "displayName": "Premium-Kollektion", "uvpEur": 39.99 },
+      { "kind": "tin", "displayName": "Tin Box", "uvpEur": 24.99 }
+    ]
+  },
+  {
+    "id": "kp65-schicksalslicht",
+    "name": "Schicksalslicht",
+    "shortCode": "KP6.5",
+    "description": "Mini-Set rund um Pecharunt aus der Indigo-Disk-DLC.",
+    "releaseDate": "2024-08-02",
+    "language": "DE",
+    "era": "Karmesin & Purpur",
+    "searchTerms": [
+      "Schicksalslicht",
+      "Shrouded Fable",
+      "KP6.5",
+      "SV6.5"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer"],
+    "variants": [
+      { "kind": "tin", "displayName": "Mini-Tin", "uvpEur": 14.99 },
+      { "kind": "bundle", "displayName": "Booster Bundle (6 Booster)", "uvpEur": 26.99 },
+      { "kind": "premium-collection", "displayName": "Premium-Kollektion Pecharunt", "uvpEur": 39.99 }
+    ]
+  },
+  {
+    "id": "kp07-stellarkrone",
+    "name": "Stellarkrone",
+    "shortCode": "KP07",
+    "description": "Terapagos und Stellar-Mechanik. Letztes Hauptset des Jahres 2024.",
+    "releaseDate": "2024-09-13",
+    "language": "DE",
+    "era": "Karmesin & Purpur",
+    "searchTerms": [
+      "Stellarkrone",
+      "Stellar Crown",
+      "KP07",
+      "SV07"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer"],
+    "variants": [
+      { "kind": "display", "displayName": "Booster Display 36", "uvpEur": 149.99 },
+      { "kind": "etb", "displayName": "Top Trainer Box", "uvpEur": 49.99 },
+      { "kind": "premium-collection", "displayName": "Premium-Kollektion Terapagos", "uvpEur": 49.99 },
+      { "kind": "tin", "displayName": "Tin Box", "uvpEur": 24.99 }
+    ]
+  },
+  {
+    "id": "kp08-funkenmeer",
+    "name": "Funkenmeer",
+    "shortCode": "KP08",
+    "description": "Pikachu ex und Sonderkarten mit hohem Sammlerwert.",
+    "releaseDate": "2024-11-08",
+    "language": "DE",
+    "era": "Karmesin & Purpur",
+    "searchTerms": [
+      "Funkenmeer",
+      "Surging Sparks",
+      "KP08",
+      "SV08"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer"],
+    "variants": [
+      { "kind": "display", "displayName": "Booster Display 36", "uvpEur": 149.99 },
+      { "kind": "etb", "displayName": "Top Trainer Box", "uvpEur": 49.99 },
+      { "kind": "premium-collection", "displayName": "Premium-Kollektion Pikachu ex", "uvpEur": 49.99 },
+      { "kind": "tin", "displayName": "Tin Box", "uvpEur": 24.99 }
+    ]
+  },
+  {
+    "id": "kp85-prismatische-entwicklungen",
+    "name": "Prismatische Entwicklungen",
+    "shortCode": "KP8.5",
+    "description": "Eevee-Evolutions-Set. Massiv ausverkauft seit Release.",
+    "releaseDate": "2025-01-17",
+    "language": "DE",
+    "era": "Karmesin & Purpur",
+    "searchTerms": [
+      "Prismatische Entwicklungen",
+      "Prismatic Evolutions",
+      "KP8.5",
+      "SV8.5"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer"],
+    "variants": [
+      { "kind": "display", "displayName": "Booster Bundle Display", "uvpEur": 159.99 },
+      { "kind": "etb", "displayName": "Elite Trainer Box", "uvpEur": 54.99 },
+      { "kind": "premium-collection", "displayName": "Premium-Kollektion Evoli", "uvpEur": 59.99 },
+      { "kind": "tin", "displayName": "Mini-Tin", "uvpEur": 14.99 },
+      { "kind": "bundle", "displayName": "Booster Bundle (6 Booster)", "uvpEur": 26.99 }
+    ]
+  },
+  {
+    "id": "kp09-reisegefaehrten",
+    "name": "Reisegefährten",
+    "shortCode": "KP09",
+    "description": "Zusammenarbeit-Karten von Hauptcharakteren und ihren Pokémon.",
+    "releaseDate": "2025-03-28",
+    "language": "DE",
+    "era": "Karmesin & Purpur",
+    "searchTerms": [
+      "Reisegefährten",
+      "Journey Together",
+      "KP09",
+      "SV09"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer"],
+    "variants": [
+      { "kind": "display", "displayName": "Booster Display 36", "uvpEur": 149.99 },
+      { "kind": "etb", "displayName": "Top Trainer Box", "uvpEur": 49.99 },
+      { "kind": "premium-collection", "displayName": "Premium-Kollektion", "uvpEur": 49.99 },
+      { "kind": "tin", "displayName": "Tin Box", "uvpEur": 24.99 }
+    ]
+  },
+  {
+    "id": "kp95-ewige-rivalen",
+    "name": "Ewige Rivalen",
+    "shortCode": "KP9.5",
+    "description": "Rival-Charaktere von Marnie, Cynthia, Steven & Co.",
+    "releaseDate": "2025-05-30",
+    "language": "DE",
+    "era": "Karmesin & Purpur",
+    "searchTerms": [
+      "Ewige Rivalen",
+      "Destined Rivals",
+      "Karmesin Purpur Ewige Rivalen",
+      "KP9.5",
+      "SV9.5"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer"],
+    "variants": [
+      { "kind": "display", "displayName": "Booster Display 36", "uvpEur": 149.99 },
+      { "kind": "etb", "displayName": "Top Trainer Box", "uvpEur": 49.99 },
+      { "kind": "premium-collection", "displayName": "Premium-Kollektion", "uvpEur": 49.99 },
+      { "kind": "tin", "displayName": "Tin Box", "uvpEur": 24.99 }
+    ]
+  },
+  {
+    "id": "kp10-black-bolt-white-flare",
+    "name": "Black Bolt / White Flare",
+    "shortCode": "KP10",
+    "description": "Doppelt-Set rund um Reshiram und Zekrom (parallel veröffentlicht).",
+    "releaseDate": "2025-07-18",
+    "language": "DE",
+    "era": "Karmesin & Purpur",
+    "searchTerms": [
+      "Black Bolt",
+      "White Flare",
+      "Schwarzer Blitz",
+      "Weiße Flamme",
+      "KP10",
+      "SV10"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer"],
+    "variants": [
+      { "kind": "display", "displayName": "Black Bolt Booster Display", "uvpEur": 149.99 },
+      { "kind": "display", "displayName": "White Flare Booster Display", "uvpEur": 149.99 },
+      { "kind": "etb", "displayName": "Black Bolt Elite Trainer Box", "uvpEur": 54.99 },
+      { "kind": "etb", "displayName": "White Flare Elite Trainer Box", "uvpEur": 54.99 },
+      { "kind": "premium-collection", "displayName": "Premium-Kollektion (beide)", "uvpEur": 49.99 }
+    ]
+  },
+  {
+    "id": "kp105-mega-evolution-wachsendes-chaos",
+    "name": "Mega Evolution: Wachsendes Chaos",
+    "shortCode": "KP10.5",
+    "description": "Erste Erweiterung der neuen Mega-Evolution-Ära. Mega-Charizard, Mega-Zygarde u.a.",
+    "releaseDate": "2025-09-26",
+    "language": "DE",
+    "era": "Karmesin & Purpur",
+    "searchTerms": [
+      "Mega Evolution Wachsendes Chaos",
+      "Mega-Entwicklung Wachsendes Chaos",
+      "Pokemon Mega Wachsendes Chaos",
+      "KP10.5"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer"],
+    "variants": [
+      { "kind": "display", "displayName": "Booster Display 36", "uvpEur": 159.99 },
+      { "kind": "etb", "displayName": "Top Trainer Box", "uvpEur": 54.99 },
+      { "kind": "premium-collection", "displayName": "Premium-Kollektion Mega-Charizard", "uvpEur": 59.99 },
+      { "kind": "blister", "displayName": "3-Pack-Blister", "uvpEur": 12.99 }
+    ]
+  },
+  {
+    "id": "kp11-mega-evolution-optimale-ordnung",
+    "name": "Mega Evolution: Optimale Ordnung",
+    "shortCode": "KP11",
+    "description": "Zweite Mega-Evolution-Erweiterung mit Mega-Zygarde ex.",
+    "releaseDate": "2025-11-14",
+    "language": "DE",
+    "era": "Karmesin & Purpur",
+    "searchTerms": [
+      "Mega Evolution Optimale Ordnung",
+      "Mega-Entwicklung Optimale Ordnung",
+      "Mega Zygarde Premium",
+      "KP11"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer"],
+    "variants": [
+      { "kind": "display", "displayName": "Booster Display 36", "uvpEur": 159.99 },
+      { "kind": "etb", "displayName": "Top Trainer Box", "uvpEur": 54.99 },
+      { "kind": "premium-collection", "displayName": "Premium-Kollektion Mega-Zygarde ex", "uvpEur": 59.99 }
+    ]
+  },
+  {
+    "id": "30th-anniversary",
+    "name": "Pokemon 30th Anniversary",
+    "shortCode": "30TH",
+    "description": "Jubiläums-Linie zum 30. Geburtstag. Spezial-Display, First-Partner-Sets, Premium Decks.",
+    "releaseDate": "2026-09-16",
+    "language": "DE",
+    "era": "30th Anniversary",
+    "searchTerms": [
+      "30th Anniversary",
+      "30th Celebration",
+      "30 Jahre Pokemon",
+      "Jubiläum Pokemon",
+      "Pokemon Day 2026",
+      "First Partner Illustration Collection",
+      "Erste Partner Illustrations-Kollektion"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer", "Display Box leer"],
+    "variants": [
+      { "kind": "display", "displayName": "30th Celebration Booster Display", "uvpEur": 159.99 },
+      { "kind": "etb", "displayName": "30th Celebration Elite Trainer Box", "uvpEur": 49.99 },
+      { "kind": "booster", "displayName": "30th Celebration Einzelbooster", "uvpEur": 4.99 },
+      { "kind": "premium-collection", "displayName": "Premium Deck Espeon & Umbreon", "uvpEur": 39.99 },
+      { "kind": "collection", "displayName": "Pokemon Day 2026 Collection", "uvpEur": 24.99 },
+      { "kind": "collection", "displayName": "First Partner Illustration Collection Serie 1", "uvpEur": 34.99 },
+      { "kind": "collection", "displayName": "First Partner Illustration Collection Serie 2", "uvpEur": 34.99 },
+      { "kind": "collection", "displayName": "First Partner Illustration Collection Serie 3", "uvpEur": 34.99 },
+      { "kind": "collection", "displayName": "30th Celebration Card Sets", "uvpEur": null }
+    ]
+  }
+]

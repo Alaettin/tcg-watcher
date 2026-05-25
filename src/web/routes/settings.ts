@@ -1,0 +1,96 @@
+import { Router } from "express";
+import { z } from "zod";
+import {
+  DEFAULT_NTFY_CONFIG,
+  SETTING_KEYS,
+  getAllSettings,
+  getNtfyConfig,
+  getSetting,
+  setSetting,
+} from "../../lib/settings.js";
+import { DEFAULT_GLOBAL_NEGATIVE_TERMS } from "../../matcher/productMatcher.js";
+import { sendTestPush } from "../../notify/ntfy.js";
+
+export const settingsRouter = Router();
+
+const NtfyChannelSchema = z.object({
+  id: z.string().min(1).max(60),
+  name: z.string().min(1).max(60),
+  topic: z
+    .string()
+    .min(3)
+    .max(120)
+    .regex(/^[a-zA-Z0-9_-]+$/, "only letters/digits/_/-"),
+  enabled: z.boolean(),
+});
+
+const NtfyConfigSchema = z.object({
+  server: z.string().url(),
+  channels: z.array(NtfyChannelSchema).max(10),
+});
+
+const VALIDATORS: Record<string, z.ZodTypeAny> = {
+  [SETTING_KEYS.GLOBAL_NEGATIVE_TERMS]: z.array(z.string().min(1).max(120)).max(500),
+  [SETTING_KEYS.NTFY_CONFIG]: NtfyConfigSchema,
+};
+
+settingsRouter.get("/settings", async (_req, res, next) => {
+  try {
+    const all = await getAllSettings();
+    if (!(SETTING_KEYS.GLOBAL_NEGATIVE_TERMS in all)) {
+      all[SETTING_KEYS.GLOBAL_NEGATIVE_TERMS] = await getSetting<string[]>(
+        SETTING_KEYS.GLOBAL_NEGATIVE_TERMS,
+        DEFAULT_GLOBAL_NEGATIVE_TERMS,
+      );
+    }
+    if (!(SETTING_KEYS.NTFY_CONFIG in all)) {
+      all[SETTING_KEYS.NTFY_CONFIG] = DEFAULT_NTFY_CONFIG;
+    }
+    res.json(all);
+  } catch (err) {
+    next(err);
+  }
+});
+
+settingsRouter.put("/settings/:key", async (req, res, next) => {
+  try {
+    const key = req.params.key;
+    const validator = VALIDATORS[key];
+    if (!validator) {
+      res.status(400).json({ error: `unknown setting key: ${key}` });
+      return;
+    }
+    const parsed = validator.safeParse(req.body?.value);
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid value", issues: parsed.error.issues });
+      return;
+    }
+    await setSetting(key, parsed.data);
+    res.json({ key, value: parsed.data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const TestPushSchema = z.object({
+  topic: z
+    .string()
+    .min(3)
+    .max(120)
+    .regex(/^[a-zA-Z0-9_-]+$/, "only letters/digits/_/-"),
+});
+
+settingsRouter.post("/settings/ntfyConfig/test", async (req, res, next) => {
+  try {
+    const parsed = TestPushSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, error: "invalid topic" });
+      return;
+    }
+    const cfg = await getNtfyConfig();
+    const result = await sendTestPush(cfg.server, parsed.data.topic);
+    res.status(result.ok ? 200 : 502).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
