@@ -13,8 +13,12 @@ COPY src ./src
 RUN npx tsc
 
 # Build the React frontend into dist/public/
+# Use npm install (not ci) — the lockfile resolves slightly differently on
+# Linux Alpine npm vs other platforms (e.g. picomatch hoisting), and `ci`
+# refuses to install. install is fine here since the build is reproducible
+# enough for a self-hosted single-user app.
 COPY web/package.json web/package-lock.json* ./web/
-RUN cd web && npm ci
+RUN cd web && npm install --no-audit --no-fund
 COPY web ./web
 RUN cd web && npx vite build
 
