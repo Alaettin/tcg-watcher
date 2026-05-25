@@ -42,13 +42,13 @@ services:
       REDIS_URL: redis://redis:6379
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FILE: /app/data/events.log
-      NTFY_SERVER: ${NTFY_SERVER:-https://ntfy.sh}
-      NTFY_TOPIC: ${NTFY_TOPIC:?set NTFY_TOPIC in .env}
       WEB_PORT: ${WEB_PORT:-3000}
       WEB_USERNAME: ${WEB_USERNAME:-admin}
       WEB_PASSWORD: ${WEB_PASSWORD:?set WEB_PASSWORD in .env}
     ports:
-      - "${WEB_PORT:-3000}:${WEB_PORT:-3000}"
+      # Bind only to localhost by default — front this with a reverse proxy
+      # (Caddy/nginx) for TLS. Set BIND_HOST=0.0.0.0 in .env to expose publicly.
+      - "${BIND_HOST:-127.0.0.1}:${HOST_PORT:-3000}:${WEB_PORT:-3000}"
     volumes:
       - appdata:/app/data
 
