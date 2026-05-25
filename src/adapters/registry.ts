@@ -12,6 +12,7 @@ import { createWixAdapter } from "./wix-generic.js";
 import { createOxidAdapter } from "./oxid-generic.js";
 import { createAlternateAdapter } from "./alternate.js";
 import { createToysForFunAdapter } from "./toysforfun.js";
+import { createIdeeUndSpielAdapter } from "./ideeundspiel.js";
 
 export function createAdapterForShop(shop: Shop): ShopAdapter | null {
   switch (shop.adapterType) {
@@ -39,6 +40,8 @@ export function createAdapterForShop(shop: Shop): ShopAdapter | null {
       return createAlternateAdapter(shop.id);
     case "toysforfun":
       return createToysForFunAdapter(shop.id);
+    case "ideeundspiel":
+      return createIdeeUndSpielAdapter(shop.id);
     case "playwright":
       // TODO: generic playwright adapter — for now, dedicated adapters per retailer
       return null;

@@ -107,9 +107,9 @@ Browser → http://localhost:3000 → Login mit `admin` / `<WEB_PASSWORD aus .en
 
 | Adapter | Tech | Shops |
 |---|---|---|
-| Shopify-Generic | HTTP `/search/suggest.json` | primeprotector, cardsrfun, deckshop, godofcards, opasladen, cardcosmos, tcgviert |
-| JTL-Generic | HTTP + cheerio Schema.org-Microdata | card-corner, gate-to-the-games |
-| Shopware-Generic | HTTP `/suggest` + cheerio | cardmex-shop, jk-entertainment |
+| Shopify-Generic | HTTP `/search/suggest.json` | primeprotector, cardsrfun, deckshop, godofcards, opasladen, cardcosmos, tcgviert, deichcards, geeksheaven, bayzing |
+| JTL-Generic | HTTP + cheerio Schema.org-Microdata | card-corner, gate-to-the-games, allgames4you |
+| Shopware-Generic | HTTP `/suggest` + cheerio | cardmex-shop, jk-entertainment, einzigundartig, bb-spiele |
 | MediaMarkt-Stack | Playwright + Stealth | mediamarkt, saturn |
 | Otto | HTTP + cheerio + JSON-LD | otto |
 | Thalia | Playwright + Cookie-Accept | thalia |
@@ -118,6 +118,7 @@ Browser → http://localhost:3000 → Login mit `admin` / `<WEB_PASSWORD aus .en
 | OXID | Playwright + Cloudflare-Bypass | trader-online |
 | Alternate | Playwright Category-Page | alternate |
 | Toys-for-Fun (Magento) | Playwright Brand-Page | toys-for-fun |
+| idee+spiel (VEDES) | HTTP + cheerio Category-Page | ideeundspiel |
 
 **Eigene Shops ergänzen:** neuen Adapter in `src/adapters/<name>.ts` implementieren (`ShopAdapter`-Interface), in `src/adapters/registry.ts` registrieren, im UI unter Shops → "Neuer Shop" anlegen.
 

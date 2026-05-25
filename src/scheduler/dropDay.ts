@@ -61,6 +61,7 @@ const ADAPTER_MIN_INTERVAL_S: Record<string, number> = {
   smyths: 360,
   alternate: 90,    // single category-page, fast Playwright (~15-25s)
   toysforfun: 90,   // single brand-page, fast Playwright (~15-25s)
+  ideeundspiel: 90, // single category-page HTTP, fast (~3-5s)
   playwright: 360,
 };
 

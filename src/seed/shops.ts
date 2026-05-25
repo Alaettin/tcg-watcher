@@ -18,6 +18,7 @@ interface ShopSeed {
     | "oxid"
     | "alternate"
     | "toysforfun"
+    | "ideeundspiel"
     | "playwright";
   enabled: boolean;
   pollIntervalSeconds?: number;
@@ -170,6 +171,33 @@ export const SHOP_SEEDS: ShopSeed[] = [
     pollIntervalSeconds: 180,
     dropDayIntervalSeconds: 15,
   },
+  {
+    id: "deichcards",
+    displayName: "Deichcards (DE)",
+    baseUrl: "https://deichcards.de",
+    adapterType: "shopify",
+    enabled: true,
+    pollIntervalSeconds: 120,
+    dropDayIntervalSeconds: 10,
+  },
+  {
+    id: "geeksheaven",
+    displayName: "Geeks Heaven (DE)",
+    baseUrl: "https://geeksheaven.de",
+    adapterType: "shopify",
+    enabled: true,
+    pollIntervalSeconds: 120,
+    dropDayIntervalSeconds: 10,
+  },
+  {
+    id: "bayzing",
+    displayName: "Bayzing (DE)",
+    baseUrl: "https://bayzing.com",
+    adapterType: "shopify",
+    enabled: true,
+    pollIntervalSeconds: 120,
+    dropDayIntervalSeconds: 10,
+  },
   // Shopware TCG shop
   {
     id: "jk-entertainment",
@@ -181,9 +209,36 @@ export const SHOP_SEEDS: ShopSeed[] = [
     dropDayIntervalSeconds: 15,
   },
   {
+    id: "einzigundartig",
+    displayName: "EinzigundArtig (DE)",
+    baseUrl: "https://www.einzigundartig.de",
+    adapterType: "shopware",
+    enabled: true,
+    pollIntervalSeconds: 180,
+    dropDayIntervalSeconds: 15,
+  },
+  {
+    id: "bb-spiele",
+    displayName: "BB-Spiele (DE)",
+    baseUrl: "https://www.bb-spiele.de",
+    adapterType: "shopware",
+    enabled: true,
+    pollIntervalSeconds: 180,
+    dropDayIntervalSeconds: 15,
+  },
+  {
     id: "gate-to-the-games",
     displayName: "Gate to the Games (DE)",
     baseUrl: "https://www.gate-to-the-games.de",
+    adapterType: "jtl",
+    enabled: true,
+    pollIntervalSeconds: 180,
+    dropDayIntervalSeconds: 15,
+  },
+  {
+    id: "allgames4you",
+    displayName: "AllGames4you (DE)",
+    baseUrl: "https://www.allgames4you.de",
     adapterType: "jtl",
     enabled: true,
     pollIntervalSeconds: 180,
@@ -230,6 +285,15 @@ export const SHOP_SEEDS: ShopSeed[] = [
     displayName: "Toys for Fun (DE)",
     baseUrl: "https://www.toys-for-fun.com",
     adapterType: "toysforfun",
+    enabled: true,
+    pollIntervalSeconds: 300,
+    dropDayIntervalSeconds: 30,
+  },
+  {
+    id: "ideeundspiel",
+    displayName: "idee+spiel (DE)",
+    baseUrl: "https://www.ideeundspiel.com",
+    adapterType: "ideeundspiel",
     enabled: true,
     pollIntervalSeconds: 300,
     dropDayIntervalSeconds: 30,
