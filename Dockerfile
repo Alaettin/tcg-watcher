@@ -1,9 +1,10 @@
-FROM node:22-alpine AS builder
+# Playwright base image — ships Chromium + Node 22 + system deps required by
+# Playwright. Heavier than node:22-alpine (~1.2GB final) but mandatory for the
+# Playwright-based shop adapters (mediamarkt/saturn/thalia/galaxus/wix/oxid/
+# alternate/toysforfun). Pin to v1.49 to match the playwright npm dep.
+FROM mcr.microsoft.com/playwright:v1.49.0-jammy AS builder
 
 WORKDIR /app
-
-# openssl is needed by Prisma's schema engine binary on Alpine
-RUN apk add --no-cache openssl
 
 COPY package.json package-lock.json* ./
 RUN npm ci
@@ -16,23 +17,24 @@ COPY src ./src
 RUN npx tsc
 
 # Build the React frontend into dist/public/
-# Use npm install (not ci) — the lockfile resolves slightly differently on
-# Linux Alpine npm vs other platforms (e.g. picomatch hoisting), and `ci`
-# refuses to install. install is fine here since the build is reproducible
-# enough for a self-hosted single-user app.
+# Use npm install (not ci) — the lockfile resolves slightly differently across
+# npm versions/platforms; install is fine for a self-hosted single-user app.
 COPY web/package.json web/package-lock.json* ./web/
 RUN cd web && npm install --no-audit --no-fund
 COPY web ./web
 RUN cd web && npx vite build
 
-FROM node:22-alpine AS runtime
+FROM mcr.microsoft.com/playwright:v1.49.0-jammy AS runtime
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV TZ=Europe/Berlin
 
-RUN apk add --no-cache tini tzdata openssl
+# tini for proper PID-1 signal handling; tzdata for Europe/Berlin
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tini tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev
@@ -43,10 +45,11 @@ COPY --from=builder /app/dist ./dist
 COPY prisma ./prisma
 COPY config ./config
 
-RUN mkdir -p /app/data && chown -R node:node /app
-USER node
+# pwuser is the default unprivileged user shipped with the Playwright image
+RUN mkdir -p /app/data && chown -R pwuser:pwuser /app
+USER pwuser
 
 EXPOSE 3000
 
-ENTRYPOINT ["/sbin/tini", "--"]
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
