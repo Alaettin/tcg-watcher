@@ -2,6 +2,9 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
+# openssl is needed by Prisma's schema engine binary on Alpine
+RUN apk add --no-cache openssl
+
 COPY package.json package-lock.json* ./
 RUN npm ci
 
@@ -29,7 +32,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV TZ=Europe/Berlin
 
-RUN apk add --no-cache tini tzdata
+RUN apk add --no-cache tini tzdata openssl
 
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev
