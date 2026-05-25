@@ -32,8 +32,10 @@ ENV NODE_ENV=production
 ENV TZ=Europe/Berlin
 
 # tini for proper PID-1 signal handling; tzdata for Europe/Berlin
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends tini tzdata \
+# DEBIAN_FRONTEND=noninteractive prevents tzdata from blocking on the
+# interactive geographic-area prompt.
+RUN DEBIAN_FRONTEND=noninteractive apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends tini tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json* ./
