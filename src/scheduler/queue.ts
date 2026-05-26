@@ -130,6 +130,11 @@ export async function startScheduler(): Promise<{ stop: () => Promise<void> }> {
     {
       connection: createRedisConnection(),
       concurrency: 3,
+      // HTTP adapters complete in 5-30s. 5min lock is generous headroom;
+      // anything longer is genuinely stuck and should be released.
+      lockDuration: 5 * 60_000,
+      stalledInterval: 30_000,
+      maxStalledCount: 1,
     },
   );
 
@@ -139,6 +144,12 @@ export async function startScheduler(): Promise<{ stop: () => Promise<void> }> {
     {
       connection: createRedisConnection(),
       concurrency: 1,
+      // Playwright adapters can run 100-220s worst case. 10min lock allows
+      // them to finish; beyond that the Chromium page is wedged and we
+      // want the job released so the next schedule tick can re-run it.
+      lockDuration: 10 * 60_000,
+      stalledInterval: 60_000,
+      maxStalledCount: 1,
     },
   );
 

@@ -1,6 +1,7 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
 import { logger } from "../lib/logger.js";
+import { httpGetWithRetry } from "./http.js";
 import type { ListingAvailability, RawListing, ShopAdapter } from "./ShopAdapter.js";
 
 const BASE_URL = "https://www.otto.de";
@@ -75,15 +76,19 @@ export function createOttoAdapter(shopId: string): ShopAdapter {
 
   async function searchOne(term: string): Promise<RawListing[]> {
     const url = `${BASE_URL}/suche/${encodeURIComponent(term)}/`;
-    const response = await axios.get<string>(url, {
-      timeout: DEFAULT_TIMEOUT_MS,
-      headers: {
-        "User-Agent": USER_AGENT,
-        Accept: "text/html,application/xhtml+xml",
-        "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
+    const response = await httpGetWithRetry<string>(
+      url,
+      {
+        timeout: DEFAULT_TIMEOUT_MS,
+        headers: {
+          "User-Agent": USER_AGENT,
+          Accept: "text/html,application/xhtml+xml",
+          "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
+        },
+        responseType: "text",
       },
-      responseType: "text",
-    });
+      log,
+    );
 
     const $ = cheerio.load(response.data);
     const results: RawListing[] = [];

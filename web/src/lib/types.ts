@@ -115,10 +115,13 @@ export interface Listing {
   seenAt: string;
 }
 
+export type ShopFamily = "fast" | "slow";
+
 export interface CurrentlyRunning {
   shopId: string;
   displayName: string;
   adapterType: string;
+  family: ShopFamily;
   startedAt: string | null;
   elapsedMs: number;
 }
@@ -127,6 +130,7 @@ export interface RecentRun {
   shopId: string;
   displayName: string;
   adapterType: string;
+  family: ShopFamily;
   completedAt: string | null;
   durationMs: number;
   listingsFound: number;

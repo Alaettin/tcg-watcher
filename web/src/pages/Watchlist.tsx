@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, X, Save } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Save, CheckSquare, Square } from "lucide-react";
 import clsx from "clsx";
 import { api } from "../lib/api";
 import type { SetEntry, Variant } from "../lib/types";
@@ -46,7 +46,16 @@ export function WatchlistPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sets"] }),
   });
 
+  const bulkToggle = useMutation({
+    mutationFn: (active: boolean) => api.post("/api/sets/bulk", { active }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sets"] });
+      qc.invalidateQueries({ queryKey: ["heartbeat"] });
+    },
+  });
+
   const totalActive = sets.data?.filter((s) => s.active).length ?? 0;
+  const totalSets = sets.data?.length ?? 0;
 
   return (
     <div className="space-y-4">
@@ -54,15 +63,40 @@ export function WatchlistPage() {
         <div>
           <h1 className="text-xl font-semibold">Sets</h1>
           <div className="text-xs text-slate-500 mt-0.5">
-            {sets.data?.length ?? 0} Sets gesamt • {totalActive} aktiv
+            {totalSets} Sets gesamt • {totalActive} aktiv
           </div>
         </div>
-        <button
-          onClick={() => setEditing("new")}
-          className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-sm font-medium"
-        >
-          <Plus size={14} /> Neues Set
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => bulkToggle.mutate(true)}
+            disabled={bulkToggle.isPending || totalActive === totalSets || totalSets === 0}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded border border-slate-300 dark:border-slate-700 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <CheckSquare size={14} /> Alle aktivieren
+          </button>
+          <button
+            onClick={() => {
+              if (
+                totalActive > 0 &&
+                window.confirm(
+                  `Wirklich alle ${totalActive} aktiven Sets deaktivieren?\n\nDu bekommst dann keine Pushes mehr, bis du wieder Sets aktivierst.`,
+                )
+              ) {
+                bulkToggle.mutate(false);
+              }
+            }}
+            disabled={bulkToggle.isPending || totalActive === 0}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded border border-slate-300 dark:border-slate-700 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Square size={14} /> Alle deaktivieren
+          </button>
+          <button
+            onClick={() => setEditing("new")}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-sm font-medium"
+          >
+            <Plus size={14} /> Neues Set
+          </button>
+        </div>
       </div>
 
       {sets.isLoading && <div className="text-sm text-slate-500">Lade Sets…</div>}

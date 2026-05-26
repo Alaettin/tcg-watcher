@@ -43,6 +43,18 @@ setsRouter.get("/sets", async (_req, res, next) => {
   }
 });
 
+setsRouter.post("/sets/bulk", async (req, res, next) => {
+  const schema = z.object({ active: z.boolean() });
+  try {
+    const { active } = schema.parse(req.body);
+    const result = await prisma.set.updateMany({ data: { active } });
+    invalidateActiveSetsCache();
+    res.json({ updated: result.count, active });
+  } catch (err) {
+    next(err);
+  }
+});
+
 setsRouter.get("/sets/presets", async (_req, res, next) => {
   try {
     const presets = await prisma.set.findMany({

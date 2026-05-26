@@ -65,41 +65,52 @@ export async function runShop(shopId: string): Promise<RunShopResult> {
     return emptyResult(shopId, Date.now() - start);
   }
 
-  const matches = await matchListingsToSets(listings);
-  const events = await detectAndPersist(shopId, matches);
-  await notifyAll(events);
+  // Wrap the post-search pipeline in try/catch so that a transient DB or
+  // ntfy hiccup doesn't fail the whole BullMQ job (which would skip the
+  // next scheduled tick) — we'd rather log and let the repeatable retry.
+  try {
+    const matches = await matchListingsToSets(listings);
+    const events = await detectAndPersist(shopId, matches);
+    await notifyAll(events);
 
-  const newListings = events.filter((e) => e.type === "NEW_LISTING").length;
-  const restocks = events.filter((e) => e.type === "RESTOCK").length;
-  const boostWorthyEvents = newListings + restocks;
-  const durationMs = Date.now() - start;
-  const completedAt = new Date();
+    const newListings = events.filter((e) => e.type === "NEW_LISTING").length;
+    const restocks = events.filter((e) => e.type === "RESTOCK").length;
+    const boostWorthyEvents = newListings + restocks;
+    const durationMs = Date.now() - start;
+    const completedAt = new Date();
 
-  await prisma.shop.update({
-    where: { id: shopId },
-    data: {
-      lastSuccessfulRun: completedAt,
-      lastRunStats: {
-        completedAt: completedAt.toISOString(),
-        durationMs,
-        listingsFound: listings.length,
-        matched: matches.length,
-        events: events.length,
-        newListings,
-        restocks,
+    await prisma.shop.update({
+      where: { id: shopId },
+      data: {
+        lastSuccessfulRun: completedAt,
+        lastRunStats: {
+          completedAt: completedAt.toISOString(),
+          durationMs,
+          listingsFound: listings.length,
+          matched: matches.length,
+          events: events.length,
+          newListings,
+          restocks,
+        },
       },
-    },
-  });
+    });
 
-  const result: RunShopResult = {
-    shopId,
-    listingsFound: listings.length,
-    matched: matches.length,
-    events: events.length,
-    boostWorthyEvents,
-    durationMs,
-  };
+    const result: RunShopResult = {
+      shopId,
+      listingsFound: listings.length,
+      matched: matches.length,
+      events: events.length,
+      boostWorthyEvents,
+      durationMs,
+    };
 
-  log.info(result, "shop run complete");
-  return result;
+    log.info(result, "shop run complete");
+    return result;
+  } catch (error) {
+    log.error(
+      { err: error, listingsFound: listings.length },
+      "post-search pipeline failed (match/detect/persist/notify)",
+    );
+    return emptyResult(shopId, Date.now() - start);
+  }
 }

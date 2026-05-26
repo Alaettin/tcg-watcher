@@ -1,5 +1,6 @@
 import axios from "axios";
 import { logger } from "../lib/logger.js";
+import { httpGetWithRetry } from "./http.js";
 import type { ListingAvailability, RawListing, ShopAdapter } from "./ShopAdapter.js";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -98,13 +99,17 @@ export function createShopifyAdapter(shopId: string, baseUrl: string): ShopAdapt
         if (i > 0) await sleep(INTER_REQUEST_DELAY_MS);
         try {
           const url = `${trimmedBase}/search/suggest.json?q=${encodeURIComponent(term)}&resources[type]=product&resources[limit]=10`;
-          const response = await axios.get<ShopifySuggestResponse>(url, {
-            timeout: DEFAULT_TIMEOUT_MS,
-            headers: {
-              "User-Agent": USER_AGENT,
-              Accept: "application/json",
+          const response = await httpGetWithRetry<ShopifySuggestResponse>(
+            url,
+            {
+              timeout: DEFAULT_TIMEOUT_MS,
+              headers: {
+                "User-Agent": USER_AGENT,
+                Accept: "application/json",
+              },
             },
-          });
+            log,
+          );
 
           const products = response.data.resources?.results?.products ?? [];
 

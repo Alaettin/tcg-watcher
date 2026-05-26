@@ -1,10 +1,11 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Box, Layers, Loader2, Pause, Play, Radio, RefreshCw, Send, Trash2 } from "lucide-react";
+import { Activity, AlertTriangle, Box, Layers, Loader2, Pause, Play, Radio, RefreshCw, Send, Trash2, Zap } from "lucide-react";
 import clsx from "clsx";
 import { api, useEventStream } from "../lib/api";
 import { ago } from "../lib/format";
-import type { CurrentlyRunning, HeartbeatSnapshot, RecentRun } from "../lib/types";
+import type { CurrentlyRunning, HeartbeatSnapshot, RecentRun, ShopFamily } from "../lib/types";
 
 interface SchedulerStatus {
   paused: boolean;
@@ -38,6 +39,7 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {hb && hb.activeSetCount === 0 && <NoActiveSetsAlert />}
       <ControlBar status={schedStatus.data} onStatusChange={() => qc.invalidateQueries({ queryKey: ["scheduler-status"] })} />
 
       <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -247,7 +249,10 @@ function RunningSection({ runs }: { runs: CurrentlyRunning[] }) {
             >
               <Loader2 size={16} className="animate-spin text-blue-700 dark:text-blue-300 shrink-0" />
               <div className="min-w-0 flex-1">
-                <div className="font-medium text-sm truncate">{r.displayName}</div>
+                <div className="font-medium text-sm truncate flex items-center gap-2">
+                  <span className="truncate">{r.displayName}</span>
+                  <FamilyBadge family={r.family} />
+                </div>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 flex gap-2">
                   <span>{r.adapterType}</span>
                   <span>läuft seit {Math.floor(r.elapsedMs / 1000)}s</span>
@@ -262,11 +267,62 @@ function RunningSection({ runs }: { runs: CurrentlyRunning[] }) {
 }
 
 function RecentRunsSection({ runs }: { runs: RecentRun[] }) {
+  const fastRuns = runs.filter((r) => r.family === "fast");
+  const slowRuns = runs.filter((r) => r.family === "slow");
+
   return (
     <section>
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-2">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">
         Letzte Runs
       </h2>
+      <div className="grid lg:grid-cols-2 gap-4">
+        <RunsTable
+          title="HTTP-Shops"
+          subtitle="parallel · schnell"
+          icon={<Zap size={14} />}
+          colorClass="text-amber-700 dark:text-amber-300"
+          runs={fastRuns}
+          emptyLabel="Keine fast-Shops aktiv."
+        />
+        <RunsTable
+          title="Playwright-Shops"
+          subtitle="sequenziell · langsam"
+          icon={<Box size={14} />}
+          colorClass="text-purple-700 dark:text-purple-300"
+          runs={slowRuns}
+          emptyLabel="Keine slow-Shops aktiv."
+        />
+      </div>
+    </section>
+  );
+}
+
+function RunsTable({
+  title,
+  subtitle,
+  icon,
+  colorClass,
+  runs,
+  emptyLabel,
+}: {
+  title: string;
+  subtitle: string;
+  icon: React.ReactNode;
+  colorClass: string;
+  runs: RecentRun[];
+  emptyLabel: string;
+}) {
+  return (
+    <div>
+      <h3 className={clsx("text-xs font-semibold uppercase tracking-wide mb-2 flex items-center gap-2", colorClass)}>
+        <span className="flex items-center gap-1">
+          {icon}
+          {title}
+        </span>
+        <span className="text-slate-400 dark:text-slate-500 normal-case font-normal">
+          {subtitle} · {runs.length}
+        </span>
+      </h3>
 
       {/* Desktop: table */}
       <div className="hidden md:block rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
@@ -277,7 +333,6 @@ function RecentRunsSection({ runs }: { runs: RecentRun[] }) {
               <th className="text-center px-2 py-2 font-medium w-8">Status</th>
               <th className="text-right px-2 py-2 font-medium">Vor</th>
               <th className="text-right px-2 py-2 font-medium">Dauer</th>
-              <th className="text-right px-2 py-2 font-medium">Listings</th>
               <th className="text-right px-2 py-2 font-medium">Match</th>
               <th className="text-right px-3 py-2 font-medium">Events</th>
             </tr>
@@ -304,8 +359,10 @@ function RecentRunsSection({ runs }: { runs: RecentRun[] }) {
                 <td className="text-right text-xs text-slate-600 dark:text-slate-400 px-2 py-2 tabular-nums">
                   {r.durationMs > 0 ? formatDuration(r.durationMs) : "—"}
                 </td>
-                <td className="text-right text-xs px-2 py-2 tabular-nums">{r.listingsFound}</td>
-                <td className="text-right text-xs px-2 py-2 tabular-nums">{r.matched}</td>
+                <td className="text-right text-xs px-2 py-2 tabular-nums">
+                  {r.matched}
+                  <span className="text-slate-400 text-[10px]">/{r.listingsFound}</span>
+                </td>
                 <td className="text-right text-xs px-3 py-2 tabular-nums">
                   <EventBadges events={r.events} newListings={r.newListings} restocks={r.restocks} />
                 </td>
@@ -313,8 +370,8 @@ function RecentRunsSection({ runs }: { runs: RecentRun[] }) {
             ))}
             {runs.length === 0 && (
               <tr>
-                <td colSpan={7} className="text-center px-3 py-6 text-sm text-slate-500">
-                  Noch keine Runs.
+                <td colSpan={6} className="text-center px-3 py-6 text-sm text-slate-500">
+                  {emptyLabel}
                 </td>
               </tr>
             )}
@@ -353,10 +410,47 @@ function RecentRunsSection({ runs }: { runs: RecentRun[] }) {
           </div>
         ))}
         {runs.length === 0 && (
-          <div className="text-sm text-slate-500 py-6 text-center">Noch keine Runs.</div>
+          <div className="text-sm text-slate-500 py-6 text-center">{emptyLabel}</div>
         )}
       </div>
-    </section>
+    </div>
+  );
+}
+
+function FamilyBadge({ family }: { family: ShopFamily }) {
+  return (
+    <span
+      className={clsx(
+        "text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 uppercase tracking-wide",
+        family === "fast"
+          ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+          : "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200",
+      )}
+    >
+      {family}
+    </span>
+  );
+}
+
+function NoActiveSetsAlert() {
+  return (
+    <div className="rounded-lg border border-rose-300 dark:border-rose-700 bg-rose-50 dark:bg-rose-900/20 p-4 flex items-center gap-3">
+      <AlertTriangle className="text-rose-600 dark:text-rose-400 shrink-0" size={20} />
+      <div className="flex-1 min-w-0">
+        <div className="font-medium text-rose-800 dark:text-rose-200">
+          Keine aktiven Sets — du bekommst keine Pushes.
+        </div>
+        <div className="text-sm text-rose-700 dark:text-rose-300 mt-0.5">
+          Aktiviere mindestens ein Set, damit Listings als Events erkannt und gepusht werden.
+        </div>
+      </div>
+      <Link
+        to="/watchlist"
+        className="px-3 py-1.5 rounded bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium shrink-0"
+      >
+        Zu den Sets →
+      </Link>
+    </div>
   );
 }
 

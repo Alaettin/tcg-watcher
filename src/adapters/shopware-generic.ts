@@ -1,6 +1,7 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
 import { logger } from "../lib/logger.js";
+import { httpGetWithRetry } from "./http.js";
 import type { ListingAvailability, RawListing, ShopAdapter } from "./ShopAdapter.js";
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -58,15 +59,19 @@ export function createShopwareAdapter(shopId: string, baseUrl: string): ShopAdap
 
   async function searchOne(term: string): Promise<RawListing[]> {
     const url = `${trimmedBase}/suggest?search=${encodeURIComponent(term)}`;
-    const response = await axios.get<string>(url, {
-      timeout: DEFAULT_TIMEOUT_MS,
-      headers: {
-        "User-Agent": USER_AGENT,
-        Accept: "text/html,application/xhtml+xml",
-        "X-Requested-With": "XMLHttpRequest",
+    const response = await httpGetWithRetry<string>(
+      url,
+      {
+        timeout: DEFAULT_TIMEOUT_MS,
+        headers: {
+          "User-Agent": USER_AGENT,
+          Accept: "text/html,application/xhtml+xml",
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        responseType: "text",
       },
-      responseType: "text",
-    });
+      log,
+    );
 
     const $ = cheerio.load(response.data);
     const results: RawListing[] = [];

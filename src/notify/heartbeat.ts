@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { logger } from "../lib/logger.js";
 import { getAllActiveJobs } from "../scheduler/queue.js";
 import { getCurrentIntervalSeconds } from "../scheduler/dropDay.js";
+import { familyOf, type ShopFamily } from "../scheduler/adapterFamily.js";
 import { sendNtfyRaw } from "./ntfy.js";
 
 export interface ShopRunStats {
@@ -19,6 +20,7 @@ export interface CurrentlyRunning {
   shopId: string;
   displayName: string;
   adapterType: string;
+  family: ShopFamily;
   startedAt: string | null;
   elapsedMs: number;
 }
@@ -27,6 +29,7 @@ export interface RecentRun {
   shopId: string;
   displayName: string;
   adapterType: string;
+  family: ShopFamily;
   completedAt: string | null;
   durationMs: number;
   listingsFound: number;
@@ -86,6 +89,7 @@ async function collectCurrentlyRunning(
           shopId,
           displayName: meta.displayName,
           adapterType: meta.adapterType,
+          family: familyOf({ adapterType: meta.adapterType }),
           startedAt: startedAt ? new Date(startedAt).toISOString() : null,
           elapsedMs: startedAt ? now - startedAt : 0,
         } as CurrentlyRunning;
@@ -135,6 +139,7 @@ export async function collectHeartbeat(): Promise<HeartbeatSnapshot> {
       shopId: s.id,
       displayName: s.displayName,
       adapterType: s.adapterType,
+      family: familyOf(s),
       completedAt: stats?.completedAt ?? s.lastSuccessfulRun?.toISOString() ?? null,
       durationMs: stats?.durationMs ?? 0,
       listingsFound: stats?.listingsFound ?? 0,
