@@ -229,14 +229,19 @@ function ChannelRow({
           : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40",
       )}
     >
-      <div className="flex items-start gap-2">
-        <input
-          type="checkbox"
-          checked={channel.enabled}
-          onChange={(e) => onChange({ enabled: e.target.checked })}
-          className="h-4 w-4 mt-1.5 shrink-0"
-          aria-label="enabled"
-        />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-2">
+        <div className="flex items-center gap-2 sm:items-start sm:pt-1.5">
+          <input
+            type="checkbox"
+            checked={channel.enabled}
+            onChange={(e) => onChange({ enabled: e.target.checked })}
+            className="h-4 w-4 shrink-0"
+            aria-label="enabled"
+          />
+          <span className="text-xs font-medium sm:hidden truncate">
+            {channel.name || "Channel"}
+          </span>
+        </div>
         <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-3 gap-2">
           <label className="block">
             <span className="text-[11px] text-slate-500">Name</span>
@@ -254,34 +259,36 @@ function ChannelRow({
                 value={channel.topic}
                 onChange={(e) => onChange({ topic: e.target.value.trim() })}
                 placeholder="pokemon-watcher-…"
-                className="flex-1 text-sm font-mono px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
+                className="flex-1 min-w-0 text-sm font-mono px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
               />
               <button
                 onClick={() => onChange({ topic: randomTopic() })}
                 title="Random Topic generieren"
-                className="px-2 py-1 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200"
+                className="shrink-0 px-2 py-1 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200"
               >
                 <RefreshCw size={13} />
               </button>
             </div>
-            <div className="text-[10px] text-slate-500 mt-0.5 truncate">
+            <div className="text-[10px] text-slate-500 mt-0.5 break-all">
               {server.replace(/\/$/, "")}/{channel.topic || "(leer)"}
             </div>
           </label>
         </div>
-        <div className="shrink-0 flex flex-col gap-1">
+        <div className="shrink-0 flex flex-row gap-1 sm:flex-col sm:self-start">
           <button
             onClick={onTest}
             disabled={!channel.topic || testState === "sending"}
+            title="Test-Push senden"
             className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 disabled:opacity-50"
           >
-            <Send size={11} /> Test
+            <Send size={11} /> <span className="hidden sm:inline">Test</span>
           </button>
           <button
             onClick={onRemove}
+            title="Channel löschen"
             className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-rose-100 text-rose-900 dark:bg-rose-900/30 dark:text-rose-200"
           >
-            <Trash2 size={11} /> Löschen
+            <Trash2 size={11} /> <span className="hidden sm:inline">Löschen</span>
           </button>
         </div>
       </div>

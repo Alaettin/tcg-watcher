@@ -293,7 +293,7 @@ function ListEditor({ listId, onDelete }: { listId: string; onDelete: () => void
           <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/50 text-xs uppercase tracking-wide text-slate-500 font-medium border-b border-slate-200 dark:border-slate-800">
             Verfügbar ({total - inList})
           </div>
-          <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[60vh] overflow-y-auto">
+          <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[40vh] md:max-h-[60vh] overflow-y-auto">
             {eras.map((era) => {
               const candidates = (grouped.get(era) ?? []).filter((s) => !draftSetIds.has(s.id));
               if (candidates.length === 0) return null;
@@ -328,7 +328,7 @@ function ListEditor({ listId, onDelete }: { listId: string; onDelete: () => void
           <div className="px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-xs uppercase tracking-wide text-emerald-700 dark:text-emerald-200 font-medium border-b border-emerald-200 dark:border-emerald-800/50">
             In Liste ({inList})
           </div>
-          <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[60vh] overflow-y-auto">
+          <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[40vh] md:max-h-[60vh] overflow-y-auto">
             {inList === 0 && (
               <div className="px-3 py-6 text-center text-sm text-slate-500">
                 Noch keine Sets in dieser Liste.

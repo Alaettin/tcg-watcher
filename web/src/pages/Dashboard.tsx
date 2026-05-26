@@ -157,39 +157,49 @@ function ControlBar({
       )}>
         {isPaused
           ? status && status.active > 0
-            ? `PAUSIERT — ${status.active} läuft noch`
+            ? (
+                <>
+                  <span className="sm:hidden">PAUSIERT ({status.active})</span>
+                  <span className="hidden sm:inline">PAUSIERT — {status.active} läuft noch</span>
+                </>
+              )
             : "PAUSIERT"
           : "LÄUFT"}
       </span>
 
       {status && (
-        <span className="text-xs text-slate-500 mr-auto">
+        <span className="hidden sm:inline-block text-xs text-slate-500 mr-auto">
           {status.active} aktiv · {status.waiting} wartend · {status.delayed} delayed
         </span>
       )}
+      {/* Auf Mobile gibt's mr-auto trotzdem als unsichtbarer Spacer damit Aktions-Buttons rechtsbündig sind */}
+      <span className="sm:hidden mr-auto" />
 
       <button
         onClick={() => heartbeat.mutate()}
         disabled={busy}
+        title="Heartbeat-Push senden"
         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-slate-100 dark:bg-slate-800 text-sm disabled:opacity-50"
       >
-        <Send size={13} /> Heartbeat
+        <Send size={13} /> <span className="hidden sm:inline">Heartbeat</span>
       </button>
 
       <button
         onClick={() => restartBrowser.mutate()}
         disabled={busy}
+        title="Playwright-Browser neu starten"
         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-slate-100 dark:bg-slate-800 text-sm disabled:opacity-50"
       >
-        <RefreshCw size={13} /> Browser
+        <RefreshCw size={13} /> <span className="hidden sm:inline">Browser</span>
       </button>
 
       <button
         onClick={() => { if (confirm("Wirklich alles zurücksetzen?\n\nListings, Events, Shop-Statistiken und Queue-Jobs werden gelöscht. Sets, Listen und Settings bleiben. Diese Aktion ist nicht umkehrbar.")) reset.mutate(); }}
         disabled={busy}
+        title="Listings, Events, Shop-Stats und Queues löschen"
         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-rose-100 text-rose-900 dark:bg-rose-900/30 dark:text-rose-200 text-sm disabled:opacity-50"
       >
-        <Trash2 size={13} /> Reset DB
+        <Trash2 size={13} /> <span className="hidden sm:inline">Reset DB</span>
       </button>
 
       {feedback && (

@@ -186,26 +186,28 @@ function ShopRow({ shop, lists, defaultListId, onChanged }: RowProps) {
 
   return (
     <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
-      <div className="flex flex-wrap items-center gap-3 gap-y-2">
-        <label className="inline-flex items-center gap-2 cursor-pointer">
+      <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:gap-3">
+        <label className="inline-flex items-center gap-2 cursor-pointer min-w-0 flex-1">
           <input
             type="checkbox"
-            className="h-4 w-4"
+            className="h-4 w-4 shrink-0"
             checked={enabled}
             onChange={(e) => {
               setEnabled(e.target.checked);
               patch.mutate({ enabled: e.target.checked });
             }}
           />
-          <span className="font-medium">{shop.displayName}</span>
+          <span className="font-medium truncate">{shop.displayName}</span>
+          <span className={clsx("h-2 w-2 rounded-full shrink-0", !shop.enabled ? "bg-slate-400" : shop.online ? "bg-emerald-500" : "bg-rose-500")} />
         </label>
-        <span className={clsx("h-2 w-2 rounded-full", !shop.enabled ? "bg-slate-400" : shop.online ? "bg-emerald-500" : "bg-rose-500")} />
-        <span className="text-xs text-slate-500">{shop.adapterType}</span>
-        <span className="text-xs text-slate-500">letzte: {ago(shop.lastSuccessfulRun)}</span>
+        <div className="flex items-center gap-3 text-xs text-slate-500">
+          <span>{shop.adapterType}</span>
+          <span>letzte: {ago(shop.lastSuccessfulRun)}</span>
+        </div>
         <button
           onClick={() => trigger.mutate()}
           disabled={trigger.isPending || !shop.enabled}
-          className="ml-auto inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 disabled:opacity-50"
+          className="md:ml-auto inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 disabled:opacity-50 self-start md:self-auto"
         >
           {trigger.isPending ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
           Jetzt triggern
@@ -237,7 +239,9 @@ function ShopRow({ shop, lists, defaultListId, onChanged }: RowProps) {
           ))}
         </select>
         <span className="text-[11px] text-slate-500">
-          → effektiv: <span className="font-medium">{effectiveListName}</span>
+          <span className="hidden sm:inline">→ effektiv: </span>
+          <span className="sm:hidden">→ </span>
+          <span className="font-medium">{effectiveListName}</span>
         </span>
       </div>
 

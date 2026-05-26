@@ -8,7 +8,7 @@ const ITEMS = [
   { to: "/lists", label: "Listen", icon: Bookmark },
   { to: "/shops", label: "Shops", icon: Store },
   { to: "/events", label: "Events", icon: Bell },
-  { to: "/settings", label: "Settings", icon: SettingsIcon },
+  { to: "/settings", label: "Einst.", icon: SettingsIcon },
 ];
 
 export function NavBar() {
@@ -47,15 +47,15 @@ export function NavBar() {
               end={item.to === "/"}
               className={({ isActive }) =>
                 clsx(
-                  "flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium",
+                  "flex flex-col items-center gap-0.5 py-2 text-[9px] font-medium min-w-0",
                   isActive
                     ? "text-slate-900 dark:text-slate-100"
                     : "text-slate-500 dark:text-slate-400",
                 )
               }
             >
-              <item.icon size={20} />
-              {item.label}
+              <item.icon size={18} />
+              <span className="truncate w-full text-center px-0.5">{item.label}</span>
             </NavLink>
           ))}
         </div>
