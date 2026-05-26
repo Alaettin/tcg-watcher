@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Box, Loader2, Pause, Play, Radio, RefreshCw, Send, Trash2 } from "lucide-react";
+import { Activity, Box, Layers, Loader2, Pause, Play, Radio, RefreshCw, Send, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { api, useEventStream } from "../lib/api";
 import { ago } from "../lib/format";
@@ -40,12 +40,17 @@ export function DashboardPage() {
     <div className="space-y-6">
       <ControlBar status={schedStatus.data} onStatusChange={() => qc.invalidateQueries({ queryKey: ["scheduler-status"] })} />
 
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <ShopHealthStat
           enabled={hb?.enabledCount ?? 0}
           online={hb?.onlineCount ?? 0}
           offline={hb?.offlineCount ?? 0}
           total={hb?.totalShopCount ?? 0}
+        />
+        <Stat
+          label="Aktive Sets"
+          value={hb ? `${hb.activeSetCount} / ${hb.totalSetCount}` : "—"}
+          icon={<Layers size={16} />}
         />
         <Stat label="Listings getrackt" value={hb?.listingCount ?? "—"} icon={<Box size={16} />} />
         <Stat label="Events 24h" value={hb?.totalEvents24h ?? "—"} icon={<Radio size={16} />} />

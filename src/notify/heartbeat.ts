@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { prisma } from "../lib/prisma.js";
 import { logger } from "../lib/logger.js";
-import { getQueue } from "../scheduler/queue.js";
+import { getAllActiveJobs } from "../scheduler/queue.js";
 import { getCurrentIntervalSeconds } from "../scheduler/dropDay.js";
 import { sendNtfyRaw } from "./ntfy.js";
 
@@ -44,6 +44,8 @@ export interface HeartbeatSnapshot {
   onlineCount: number;
   offlineCount: number;
   listingCount: number;
+  activeSetCount: number;
+  totalSetCount: number;
   events24h: Array<{ type: string; count: number }>;
   totalEvents24h: number;
   currentlyRunning: CurrentlyRunning[];
@@ -72,7 +74,7 @@ async function collectCurrentlyRunning(
   shopMap: Map<string, { displayName: string; adapterType: string }>,
 ): Promise<CurrentlyRunning[]> {
   try {
-    const active = await getQueue().getActive();
+    const active = await getAllActiveJobs();
     const now = Date.now();
     return active
       .map((job) => {
@@ -99,7 +101,7 @@ export async function collectHeartbeat(): Promise<HeartbeatSnapshot> {
   const since = new Date(Date.now() - 24 * 3600 * 1000);
   const now = Date.now();
 
-  const [allShops, events24h, listingCount] = await Promise.all([
+  const [allShops, events24h, listingCount, activeSetCount, totalSetCount] = await Promise.all([
     prisma.shop.findMany({ orderBy: { id: "asc" } }),
     prisma.event.groupBy({
       by: ["type"],
@@ -107,6 +109,8 @@ export async function collectHeartbeat(): Promise<HeartbeatSnapshot> {
       _count: { _all: true },
     }),
     prisma.listing.count(),
+    prisma.set.count({ where: { active: true } }),
+    prisma.set.count(),
   ]);
 
   const enabledShops = allShops.filter((s) => s.enabled);
@@ -161,6 +165,8 @@ export async function collectHeartbeat(): Promise<HeartbeatSnapshot> {
     onlineCount,
     offlineCount,
     listingCount,
+    activeSetCount,
+    totalSetCount,
     events24h: events24h.map((e) => ({ type: e.type, count: e._count._all })),
     totalEvents24h: events24h.reduce((sum, e) => sum + e._count._all, 0),
     currentlyRunning,

@@ -1,4 +1,4 @@
-import { Queue, Worker, type JobsOptions } from "bullmq";
+import { Queue, Worker, type Job, type JobsOptions } from "bullmq";
 import { prisma } from "../lib/prisma.js";
 import { logger } from "../lib/logger.js";
 import { createRedisConnection } from "./redis.js";
@@ -6,30 +6,44 @@ import { runShop } from "../worker/runShop.js";
 import { getCurrentIntervalSeconds, triggerCascadeBoost, currentDropWindow } from "./dropDay.js";
 import { sendDailyHeartbeat } from "../notify/heartbeat.js";
 import { closeBrowser } from "../adapters/playwright-browser.js";
+import { familyOf, type ShopFamily } from "./adapterFamily.js";
 
-export const QUEUE_NAME = "shop-runs";
+export const QUEUE_NAME_FAST = "shop-runs-fast";
+export const QUEUE_NAME_SLOW = "shop-runs-slow";
+
+const FAMILY_QUEUE_NAME: Record<ShopFamily, string> = {
+  fast: QUEUE_NAME_FAST,
+  slow: QUEUE_NAME_SLOW,
+};
+
+const HEARTBEAT_QUEUE = "heartbeat";
 
 interface ShopRunJob {
   shopId: string;
 }
 
-const HEARTBEAT_QUEUE = "heartbeat";
+const sharedQueues: Map<ShopFamily, Queue<ShopRunJob>> = new Map();
 
-let sharedQueue: Queue<ShopRunJob> | null = null;
+function getQueueFor(family: ShopFamily): Queue<ShopRunJob> {
+  const existing = sharedQueues.get(family);
+  if (existing) return existing;
+  const queue = new Queue<ShopRunJob>(FAMILY_QUEUE_NAME[family], {
+    connection: createRedisConnection(),
+  });
+  sharedQueues.set(family, queue);
+  return queue;
+}
 
-export function getQueue(): Queue<ShopRunJob> {
-  if (!sharedQueue) {
-    sharedQueue = new Queue<ShopRunJob>(QUEUE_NAME, { connection: createRedisConnection() });
-  }
-  return sharedQueue;
+function allQueues(): Queue<ShopRunJob>[] {
+  return [getQueueFor("fast"), getQueueFor("slow")];
 }
 
 export async function pauseQueue(): Promise<void> {
-  await getQueue().pause();
+  await Promise.all(allQueues().map((q) => q.pause()));
 }
 
 export async function resumeQueue(): Promise<void> {
-  await getQueue().resume();
+  await Promise.all(allQueues().map((q) => q.resume()));
 }
 
 export interface QueueStatus {
@@ -40,18 +54,36 @@ export interface QueueStatus {
 }
 
 export async function getQueueStatus(): Promise<QueueStatus> {
-  const q = getQueue();
-  const [paused, waiting, active, delayed] = await Promise.all([
-    q.isPaused(),
-    q.getWaitingCount(),
-    q.getActiveCount(),
-    q.getDelayedCount(),
-  ]);
-  return { paused, waiting, active, delayed };
+  const queues = allQueues();
+  const stats = await Promise.all(
+    queues.map(async (q) => {
+      const [paused, waiting, active, delayed] = await Promise.all([
+        q.isPaused(),
+        q.getWaitingCount(),
+        q.getActiveCount(),
+        q.getDelayedCount(),
+      ]);
+      return { paused, waiting, active, delayed };
+    }),
+  );
+  return {
+    paused: stats.every((s) => s.paused),
+    waiting: stats.reduce((sum, s) => sum + s.waiting, 0),
+    active: stats.reduce((sum, s) => sum + s.active, 0),
+    delayed: stats.reduce((sum, s) => sum + s.delayed, 0),
+  };
+}
+
+export async function getAllActiveJobs(): Promise<Job<ShopRunJob>[]> {
+  const results = await Promise.all(allQueues().map((q) => q.getActive()));
+  return results.flat();
 }
 
 export async function triggerShopNow(shopId: string): Promise<string> {
-  const job = await getQueue().add(
+  const shop = await prisma.shop.findUnique({ where: { id: shopId } });
+  if (!shop) throw new Error(`shop ${shopId} not found`);
+  const queue = getQueueFor(familyOf(shop));
+  const job = await queue.add(
     "shop-run",
     { shopId },
     {
@@ -63,32 +95,58 @@ export async function triggerShopNow(shopId: string): Promise<string> {
   return String(job.id ?? "");
 }
 
+async function jobHandler(job: Job<ShopRunJob>) {
+  const result = await runShop(job.data.shopId);
+  if (result.boostWorthyEvents > 0) {
+    triggerCascadeBoost();
+    logger.info(
+      { events: result.boostWorthyEvents, shopId: result.shopId },
+      "cascade boost triggered (NEW_LISTING/RESTOCK)",
+    );
+  }
+  return result;
+}
+
 export async function startScheduler(): Promise<{ stop: () => Promise<void> }> {
-  const queue = getQueue();
+  // One-shot cleanup: the pre-split deployment had everything in the legacy
+  // `shop-runs` queue. Without obliterating it, its repeatables would keep
+  // firing delayed jobs that no live worker is listening for.
+  try {
+    const legacyQueue = new Queue("shop-runs", { connection: createRedisConnection() });
+    await legacyQueue.obliterate({ force: true });
+    await legacyQueue.close();
+    logger.info("legacy shop-runs queue obliterated (pre-split cleanup)");
+  } catch (error) {
+    logger.warn({ err: error }, "legacy queue cleanup failed (ok if first run)");
+  }
+
+  const fastQueue = getQueueFor("fast");
+  const slowQueue = getQueueFor("slow");
   const heartbeatQueue = new Queue(HEARTBEAT_QUEUE, { connection: createRedisConnection() });
 
-  const worker = new Worker<ShopRunJob>(
-    QUEUE_NAME,
-    async (job) => {
-      const result = await runShop(job.data.shopId);
-      if (result.boostWorthyEvents > 0) {
-        triggerCascadeBoost();
-        logger.info(
-          { events: result.boostWorthyEvents, shopId: result.shopId },
-          "cascade boost triggered (NEW_LISTING/RESTOCK)",
-        );
-      }
-      return result;
-    },
+  const fastWorker = new Worker<ShopRunJob>(
+    QUEUE_NAME_FAST,
+    jobHandler,
     {
       connection: createRedisConnection(),
       concurrency: 3,
     },
   );
 
-  worker.on("failed", (job, err) => {
-    logger.error({ err, shopId: job?.data.shopId, jobId: job?.id }, "shop-run job failed");
-  });
+  const slowWorker = new Worker<ShopRunJob>(
+    QUEUE_NAME_SLOW,
+    jobHandler,
+    {
+      connection: createRedisConnection(),
+      concurrency: 1,
+    },
+  );
+
+  for (const worker of [fastWorker, slowWorker]) {
+    worker.on("failed", (job, err) => {
+      logger.error({ err, shopId: job?.data.shopId, jobId: job?.id }, "shop-run job failed");
+    });
+  }
 
   const heartbeatWorker = new Worker(
     HEARTBEAT_QUEUE,
@@ -103,7 +161,7 @@ export async function startScheduler(): Promise<{ stop: () => Promise<void> }> {
     { connection: createRedisConnection() },
   );
 
-  await reconcileRepeatables(queue);
+  await reconcileRepeatables();
 
   await heartbeatQueue.add(
     "tick",
@@ -128,7 +186,7 @@ export async function startScheduler(): Promise<{ stop: () => Promise<void> }> {
   );
 
   const reconcileTimer = setInterval(() => {
-    reconcileRepeatables(queue).catch((err) =>
+    reconcileRepeatables().catch((err) =>
       logger.error({ err }, "scheduler reconcile failed"),
     );
   }, 60_000);
@@ -136,40 +194,52 @@ export async function startScheduler(): Promise<{ stop: () => Promise<void> }> {
   return {
     async stop() {
       clearInterval(reconcileTimer);
-      await worker.close();
+      await fastWorker.close();
+      await slowWorker.close();
       await heartbeatWorker.close();
-      await queue.close();
-      sharedQueue = null;
+      await Promise.all([fastQueue.close(), slowQueue.close()]);
+      sharedQueues.clear();
       await heartbeatQueue.close();
       await closeBrowser();
     },
   };
 }
 
-async function reconcileRepeatables(queue: Queue<ShopRunJob>): Promise<void> {
+async function reconcileRepeatables(): Promise<void> {
   const shops = await prisma.shop.findMany({ where: { enabled: true } });
-  const desired = new Map<string, { every: number }>();
+  const desired = new Map<string, { every: number; family: ShopFamily }>();
   for (const shop of shops) {
     const seconds = getCurrentIntervalSeconds(shop);
-    desired.set(shop.id, { every: seconds * 1000 });
+    desired.set(shop.id, { every: seconds * 1000, family: familyOf(shop) });
   }
 
-  const existing = await queue.getRepeatableJobs();
-  for (const job of existing) {
-    if (job.name !== "shop-run") continue;
-    const shopId = job.id ?? "";
-    const target = desired.get(shopId);
-    const currentEvery = job.every != null ? Number(job.every) : NaN;
-    if (!target || target.every !== currentEvery) {
-      await queue.removeRepeatableByKey(job.key);
+  for (const family of ["fast", "slow"] as ShopFamily[]) {
+    const queue = getQueueFor(family);
+    const existing = await queue.getRepeatableJobs();
+    for (const job of existing) {
+      if (job.name !== "shop-run") continue;
+      const shopId = job.id ?? "";
+      const target = desired.get(shopId);
+      const currentEvery = job.every != null ? Number(job.every) : NaN;
+      // remove if shop disabled, family changed, or interval changed
+      if (!target || target.family !== family || target.every !== currentEvery) {
+        await queue.removeRepeatableByKey(job.key);
+      }
     }
   }
 
-  const refreshed = await queue.getRepeatableJobs();
-  const present = new Set(refreshed.filter((j) => j.name === "shop-run").map((j) => j.id));
+  // Re-snapshot what's now present after cleanup, then add missing ones
+  const present = new Set<string>();
+  for (const family of ["fast", "slow"] as ShopFamily[]) {
+    const refreshed = await getQueueFor(family).getRepeatableJobs();
+    for (const j of refreshed) {
+      if (j.name === "shop-run" && j.id) present.add(j.id);
+    }
+  }
 
   for (const [shopId, opts] of desired.entries()) {
     if (present.has(shopId)) continue;
+    const queue = getQueueFor(opts.family);
     const jobOpts: JobsOptions = {
       repeat: { every: opts.every },
       jobId: shopId,
@@ -177,6 +247,6 @@ async function reconcileRepeatables(queue: Queue<ShopRunJob>): Promise<void> {
       removeOnFail: { count: 50 },
     };
     await queue.add("shop-run", { shopId }, jobOpts);
-    logger.info({ shopId, everyMs: opts.every }, "shop scheduled");
+    logger.info({ shopId, everyMs: opts.every, family: opts.family }, "shop scheduled");
   }
 }

@@ -149,6 +149,8 @@ export interface HeartbeatSnapshot {
   onlineCount: number;
   offlineCount: number;
   listingCount: number;
+  activeSetCount: number;
+  totalSetCount: number;
   events24h: Array<{ type: EventType; count: number }>;
   totalEvents24h: number;
   currentlyRunning: CurrentlyRunning[];
