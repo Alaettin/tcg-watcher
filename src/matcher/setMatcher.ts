@@ -49,6 +49,23 @@ function jaccard(a: Set<string>, b: Set<string>): number {
   return union === 0 ? 0 : intersection / union;
 }
 
+// Containment / Overlap coefficient: 1.0 wenn ALLE Tokens von
+// searchTermTokens in listingTokens sind, sonst 0. Notwendig weil Jaccard
+// "kurzer Begriff in langem Titel" bestraft — z.B. SearchTerm "30th
+// Anniversary" (2 Tokens) im Title "Pokemon Trading Card Game 30th
+// Anniversary First Partner Display" (10 Tokens) ergibt Jaccard 2/10=0.2,
+// obwohl der Begriff vollständig drin ist. Containment 1.0 trifft hier.
+// Bewusst all-or-nothing damit kein Score-Mid-Range entsteht. Single-Token
+// SearchTerms werden ausgeschlossen — "pokemon" allein würde sonst jedes
+// Pokemon-Listing matchen.
+function containment(searchTermTokens: Set<string>, listingTokens: Set<string>): number {
+  if (searchTermTokens.size < 2) return 0;
+  for (const t of searchTermTokens) {
+    if (!listingTokens.has(t)) return 0;
+  }
+  return 1.0;
+}
+
 function matchesNegative(title: string, negatives: string[]): boolean {
   const lower = title.toLowerCase();
   return negatives.some((n) => lower.includes(n.toLowerCase()));
@@ -182,7 +199,9 @@ export async function matchListingsToSets(
     for (const { set, termTokens } of setProfiles) {
       if (matchesNegative(listing.title, set.negativeTerms)) continue;
       for (const termSet of termTokens) {
-        const score = jaccard(listingTokens, termSet);
+        const jaccardScore = jaccard(listingTokens, termSet);
+        const containmentScore = containment(termSet, listingTokens);
+        const score = Math.max(jaccardScore, containmentScore);
         if (score > (best?.confidence ?? 0)) {
           best = { setId: set.id, confidence: score };
         }
