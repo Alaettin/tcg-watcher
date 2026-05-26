@@ -19,8 +19,15 @@ interface NtfyConfig {
 interface SettingsResponse {
   globalNegativeTerms?: string[];
   ntfyConfig?: NtfyConfig;
+  cardmarketPriceGuideUrl?: string;
+  cardmarketProductsUrl?: string;
   [key: string]: unknown;
 }
+
+const DEFAULT_CM_PRICE_URL =
+  "https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_6.json";
+const DEFAULT_CM_PRODUCTS_URL =
+  "https://downloads.s3.cardmarket.com/productCatalog/productList/products_nonsingles_6.json";
 
 const DEFAULT_NTFY: NtfyConfig = { server: "https://ntfy.sh", channels: [] };
 
@@ -45,7 +52,123 @@ export function SettingsPage() {
       <NtfySection />
       <NegativesSection />
       <ProspekteSection />
+      <CardmarketSection />
     </div>
+  );
+}
+
+function CardmarketSection() {
+  const qc = useQueryClient();
+  const settings = useQuery({
+    queryKey: ["settings"],
+    queryFn: () => api.get<SettingsResponse>("/api/settings"),
+  });
+
+  const [priceUrl, setPriceUrl] = useState<string>(DEFAULT_CM_PRICE_URL);
+  const [productsUrl, setProductsUrl] = useState<string>(DEFAULT_CM_PRODUCTS_URL);
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (!settings.data) return;
+    setPriceUrl(settings.data.cardmarketPriceGuideUrl ?? DEFAULT_CM_PRICE_URL);
+    setProductsUrl(settings.data.cardmarketProductsUrl ?? DEFAULT_CM_PRODUCTS_URL);
+    setDirty(false);
+  }, [settings.data]);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      await api.put("/api/settings/cardmarketPriceGuideUrl", { value: priceUrl });
+      await api.put("/api/settings/cardmarketProductsUrl", { value: productsUrl });
+    },
+    onSuccess: () => {
+      setDirty(false);
+      qc.invalidateQueries({ queryKey: ["settings"] });
+    },
+  });
+
+  const trigger = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; jobId: string }>("/api/admin/cardmarket/sync"),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cm-sync-status"] });
+    },
+  });
+
+  const onResetDefaults = () => {
+    setPriceUrl(DEFAULT_CM_PRICE_URL);
+    setProductsUrl(DEFAULT_CM_PRODUCTS_URL);
+    setDirty(true);
+  };
+
+  return (
+    <section className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+      <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
+        <div>
+          <h2 className="font-semibold">Cardmarket Bulk-URLs</h2>
+          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-xl">
+            Quell-URLs für den täglichen Cardmarket-Sync (04:00 MESZ). Falls Cardmarket
+            das URL-Schema ändert, hier ohne Container-Redeploy aktualisierbar. Defaults sind
+            die offiziellen S3-Endpunkte für Pokémon (game-id 6).
+          </p>
+        </div>
+        <button
+          onClick={() => trigger.mutate()}
+          disabled={trigger.isPending}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-slate-100 dark:bg-slate-800 text-sm disabled:opacity-50"
+          title="Sofort-Sync (Download + Import). Dauert 1-2 min."
+        >
+          <RefreshCw size={13} className={trigger.isPending ? "animate-spin" : ""} />
+          Jetzt synchronisieren
+        </button>
+      </div>
+
+      {trigger.isSuccess && (
+        <div className="mb-2 text-xs text-emerald-700 dark:text-emerald-400">
+          ✓ Sync gestartet — Daten erscheinen im /cardmarket-Tab in ~1-2 min.
+        </div>
+      )}
+
+      <label className="block mt-3">
+        <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Price-Guide-URL</span>
+        <input
+          type="url"
+          value={priceUrl}
+          onChange={(e) => { setPriceUrl(e.target.value); setDirty(true); }}
+          spellCheck={false}
+          className="mt-0.5 w-full font-mono text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
+        />
+      </label>
+
+      <label className="block mt-3">
+        <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Products-URL (Sealed)</span>
+        <input
+          type="url"
+          value={productsUrl}
+          onChange={(e) => { setProductsUrl(e.target.value); setDirty(true); }}
+          spellCheck={false}
+          className="mt-0.5 w-full font-mono text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
+        />
+      </label>
+
+      <div className="flex items-center gap-2 mt-3 flex-wrap">
+        <button
+          onClick={() => save.mutate()}
+          disabled={!dirty || save.isPending}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-blue-600 text-white text-sm disabled:opacity-50"
+        >
+          <Save size={14} /> {save.isPending ? "Speichere…" : "Speichern"}
+        </button>
+        {save.isSuccess && !dirty && (
+          <span className="text-xs text-emerald-700 dark:text-emerald-400">Gespeichert.</span>
+        )}
+        <button
+          onClick={onResetDefaults}
+          className="ml-auto inline-flex items-center gap-1 px-3 py-1.5 rounded border border-slate-300 dark:border-slate-700 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+          title="Setzt beide URLs auf die offiziellen S3-Defaults zurück"
+        >
+          <RotateCcw size={14} /> Auf Standard zurücksetzen
+        </button>
+      </div>
+    </section>
   );
 }
 

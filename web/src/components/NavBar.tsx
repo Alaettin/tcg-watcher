@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { Activity, Bookmark, ListChecks, Store, Tag, Bell, Settings as SettingsIcon } from "lucide-react";
+import { Activity, Bookmark, ListChecks, Store, Tag, TrendingUp, Bell, Settings as SettingsIcon } from "lucide-react";
 import clsx from "clsx";
 
 const ITEMS = [
@@ -8,6 +8,7 @@ const ITEMS = [
   { to: "/lists", label: "Listen", icon: Bookmark },
   { to: "/shops", label: "Shops", icon: Store },
   { to: "/prospekte", label: "Prosp.", icon: Tag },
+  { to: "/cardmarket", label: "CM", icon: TrendingUp },
   { to: "/events", label: "Events", icon: Bell },
   { to: "/settings", label: "Einst.", icon: SettingsIcon },
 ];
@@ -40,7 +41,7 @@ export function NavBar() {
       </header>
 
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 pb-[env(safe-area-inset-bottom)]">
-        <div className="grid grid-cols-7">
+        <div className="grid grid-cols-8">
           {ITEMS.map((item) => (
             <NavLink
               key={item.to}

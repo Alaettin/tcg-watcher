@@ -10,6 +10,9 @@ export const SETTING_KEYS = {
   PROSPEKTE_POSTAL_CODES: "prospektePostalCodes",
   PROSPEKTE_SEARCH_QUERIES: "prospekteSearchQueries",
   PROSPEKTE_NEGATIVE_TERMS: "prospekteNegativeTerms",
+  // Cardmarket Bulk-Download URLs (separates Sub-System)
+  CARDMARKET_PRICE_GUIDE_URL: "cardmarketPriceGuideUrl",
+  CARDMARKET_PRODUCTS_URL: "cardmarketProductsUrl",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
@@ -72,6 +75,24 @@ export async function getProspekteConfig(): Promise<ProspekteConfig> {
     getSetting<string[]>(SETTING_KEYS.PROSPEKTE_NEGATIVE_TERMS, DEFAULT_PROSPEKTE_NEGATIVES),
   ]);
   return { enabled, postalCodes, searchQueries, negativeTerms };
+}
+
+export interface CardmarketConfig {
+  priceGuideUrl: string;
+  productsUrl: string;
+}
+
+export const DEFAULT_CARDMARKET_CONFIG: CardmarketConfig = {
+  priceGuideUrl: "https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_6.json",
+  productsUrl: "https://downloads.s3.cardmarket.com/productCatalog/productList/products_nonsingles_6.json",
+};
+
+export async function getCardmarketConfig(): Promise<CardmarketConfig> {
+  const [priceGuideUrl, productsUrl] = await Promise.all([
+    getSetting<string>(SETTING_KEYS.CARDMARKET_PRICE_GUIDE_URL, DEFAULT_CARDMARKET_CONFIG.priceGuideUrl),
+    getSetting<string>(SETTING_KEYS.CARDMARKET_PRODUCTS_URL, DEFAULT_CARDMARKET_CONFIG.productsUrl),
+  ]);
+  return { priceGuideUrl, productsUrl };
 }
 
 const CACHE_TTL_MS = 60_000;

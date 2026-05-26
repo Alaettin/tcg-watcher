@@ -28,3 +28,7 @@ prisma/*.db-journal
 .DS_Store
 .vscode/
 .idea/
+
+# Cardmarket bulk-download payloads (downloaded daily, persisted in data/cardmarket/)
+price_guide_*.json
+products_*.json

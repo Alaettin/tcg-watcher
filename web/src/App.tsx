@@ -5,6 +5,7 @@ import { WatchlistPage } from "./pages/Watchlist";
 import { SetListsPage } from "./pages/SetLists";
 import { ShopsPage } from "./pages/Shops";
 import { ProspektePage } from "./pages/Prospekte";
+import { CardmarketPage } from "./pages/Cardmarket";
 import { EventsPage } from "./pages/Events";
 import { SettingsPage } from "./pages/Settings";
 
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="/lists" element={<SetListsPage />} />
           <Route path="/shops" element={<ShopsPage />} />
           <Route path="/prospekte" element={<ProspektePage />} />
+          <Route path="/cardmarket" element={<CardmarketPage />} />
           <Route path="/events" element={<EventsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>

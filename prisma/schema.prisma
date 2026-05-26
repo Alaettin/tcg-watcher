@@ -219,3 +219,61 @@ model OfflineEvent {
   @@index([type, createdAt])
   @@index([dealId])
 }
+
+// Cardmarket Bulk-Import. Komplett getrennt vom Online-Listing-System.
+// Daten kommen aus downloads.s3.cardmarket.com/productCatalog/* (öffentlich,
+// täglich neu generiert). 2 Quellen: products_nonsingles_6.json (Sealed-
+// Stammdaten, ~4800 Records), price_guide_6.json (Preise für Singles +
+// Sealed, ~75000 Records).
+model CardmarketProduct {
+  idProduct    Int               @id           // CM's interne product-ID
+  name         String                           // "151 Elite Trainer Box"
+  idCategory   Int                              // 1016 = "Pokémon Elite Trainer Boxes"
+  categoryName String                           // human-readable Kategorie
+  idExpansion  Int                              // 5402 = SV151 EN, 5328 = JP, ...
+  idMetacard   Int               @default(0)
+  dateAdded    DateTime?                        // CM's product-creation
+  importedAt   DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  price        CardmarketPrice?
+
+  @@index([idCategory])
+  @@index([idExpansion])
+  @@index([name])
+}
+
+model CardmarketPrice {
+  idProduct  Int                @id
+  product    CardmarketProduct? @relation(fields: [idProduct], references: [idProduct], onDelete: Cascade)
+  idCategory Int                                 // wird mit-gespeichert weil Singles oft kein
+                                                  // CardmarketProduct-Pendant haben (separate _singles_-Datei)
+  avg        Float?
+  low        Float?
+  trend      Float?
+  avg1       Float?
+  avg7       Float?
+  avg30      Float?
+  avgHolo    Float?
+  lowHolo    Float?
+  trendHolo  Float?
+  avg1Holo   Float?
+  avg7Holo   Float?
+  avg30Holo  Float?
+  importedAt DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  @@index([idCategory])
+  @@index([trend])
+}
+
+model CardmarketSyncStatus {
+  id                    String   @id @default("singleton")
+  productsLastSync      DateTime?
+  productsLastSourceAt  DateTime?
+  productsRecordCount   Int?
+  pricesLastSync        DateTime?
+  pricesLastSourceAt    DateTime?
+  pricesRecordCount     Int?
+  lastError             String?
+  updatedAt             DateTime @updatedAt
+}

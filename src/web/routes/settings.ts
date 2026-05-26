@@ -41,6 +41,8 @@ const VALIDATORS: Record<string, z.ZodTypeAny> = {
   [SETTING_KEYS.PROSPEKTE_POSTAL_CODES]: z.array(z.string().regex(/^\d{5}$/, "5-digit PLZ")).max(20),
   [SETTING_KEYS.PROSPEKTE_SEARCH_QUERIES]: z.array(z.string().min(1).max(60)).min(1).max(10),
   [SETTING_KEYS.PROSPEKTE_NEGATIVE_TERMS]: z.array(z.string().min(1).max(60)).max(50),
+  [SETTING_KEYS.CARDMARKET_PRICE_GUIDE_URL]: z.string().url(),
+  [SETTING_KEYS.CARDMARKET_PRODUCTS_URL]: z.string().url(),
 };
 
 const SET_RESOLUTION_KEYS = new Set<string>([

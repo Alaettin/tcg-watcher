@@ -16,6 +16,7 @@ import { seedSetLists } from "./seed/setLists.js";
 import { seedOfflineRetailers } from "./seed/offlineRetailers.js";
 import { startScheduler } from "./scheduler/queue.js";
 import { startOfflineScheduler } from "./offline/scheduler.js";
+import { startCardmarketScheduler } from "./cardmarket/scheduler.js";
 import { runShop } from "./worker/runShop.js";
 import { closeBrowser } from "./adapters/playwright-browser.js";
 import { startWebServer } from "./web/server.js";
@@ -49,6 +50,8 @@ async function main() {
 
   const { stop: stopOfflineScheduler } = await startOfflineScheduler();
 
+  const { stop: stopCardmarketScheduler } = await startCardmarketScheduler();
+
   const { stop: stopWeb } = await startWebServer();
 
   let shuttingDown = false;
@@ -59,6 +62,7 @@ async function main() {
     await stopWeb();
     await stopScheduler();
     await stopOfflineScheduler();
+    await stopCardmarketScheduler();
     await prisma.$disconnect();
     process.exit(0);
   };

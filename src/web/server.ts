@@ -13,6 +13,7 @@ import { settingsRouter } from "./routes/settings.js";
 import { setsRouter } from "./routes/sets.js";
 import { listsRouter } from "./routes/lists.js";
 import { prospekteRouter } from "./routes/prospekte.js";
+import { cardmarketRouter } from "./routes/cardmarket.js";
 import { adminRouter } from "./routes/admin.js";
 
 const PORT = Number(process.env.WEB_PORT ?? 3000);
@@ -68,6 +69,7 @@ export async function startWebServer(): Promise<{ stop: () => Promise<void> }> {
   app.use("/api", setsRouter);
   app.use("/api", listsRouter);
   app.use("/api", prospekteRouter);
+  app.use("/api", cardmarketRouter);
   app.use("/api", adminRouter);
 
   if (existsSync(STATIC_DIR)) {

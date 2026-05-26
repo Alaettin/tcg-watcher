@@ -189,6 +189,68 @@ export interface RecentRun {
   online: boolean;
 }
 
+export interface CardmarketPrice {
+  idProduct: number;
+  idCategory: number;
+  avg: number | null;
+  low: number | null;
+  trend: number | null;
+  avg1: number | null;
+  avg7: number | null;
+  avg30: number | null;
+  avgHolo: number | null;
+  lowHolo: number | null;
+  trendHolo: number | null;
+  avg1Holo: number | null;
+  avg7Holo: number | null;
+  avg30Holo: number | null;
+  importedAt: string;
+  updatedAt: string;
+}
+
+export interface CardmarketProduct {
+  idProduct: number;
+  name: string;
+  idCategory: number;
+  categoryName: string;
+  idExpansion: number;
+  idMetacard: number;
+  dateAdded: string | null;
+  importedAt: string;
+  updatedAt: string;
+  price: CardmarketPrice | null;
+}
+
+export interface CardmarketCategory {
+  idCategory: number;
+  categoryName: string;
+  productCount: number;
+}
+
+export interface CardmarketExpansion {
+  idExpansion: number;
+  productCount: number;
+}
+
+export interface CardmarketProductList {
+  results: CardmarketProduct[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export interface CardmarketSyncStatus {
+  id: string;
+  productsLastSync: string | null;
+  productsLastSourceAt: string | null;
+  productsRecordCount: number | null;
+  pricesLastSync: string | null;
+  pricesLastSourceAt: string | null;
+  pricesRecordCount: number | null;
+  lastError: string | null;
+  updatedAt: string;
+}
+
 export interface HeartbeatSnapshot {
   shops: Array<{
     id: string;
