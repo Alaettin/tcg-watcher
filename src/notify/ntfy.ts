@@ -53,37 +53,46 @@ interface RawPushPayload {
   actions?: Array<{ action: string; label: string; url: string; clear?: boolean }>;
 }
 
+// Shared HTTP helper with exp-backoff retry on 5xx / 429 / network errors.
+// Used by both the regular channel-push and the settings test-push so they
+// behave consistently. 4xx responses (bad topic, malformed body, etc.) are
+// permanent — no retry.
+async function postNtfyRequest(server: string, body: object): Promise<void> {
+  const trimmedServer = server.replace(/\/+$/, "");
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      await axios.post(trimmedServer, body, {
+        timeout: TIMEOUT_MS,
+        headers: { "Content-Type": "application/json" },
+      });
+      return;
+    } catch (error) {
+      const status = (error as { response?: { status?: number } }).response?.status ?? 0;
+      const retriable = !status || status >= 500 || status === 429;
+      if (!retriable || attempt === MAX_ATTEMPTS - 1) throw error;
+      const delay = 500 * Math.pow(2, attempt); // 500ms → 1000ms
+      logger.warn(
+        { status, attempt: attempt + 1, delayMs: delay },
+        "ntfy push retry after server error",
+      );
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+}
+
 async function postToChannel(
   server: string,
   channel: NtfyChannel,
   payload: RawPushPayload,
 ): Promise<void> {
-  const trimmedServer = server.replace(/\/+$/, "");
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    try {
-      await axios.post(
-        trimmedServer,
-        { topic: channel.topic, ...payload },
-        { timeout: TIMEOUT_MS, headers: { "Content-Type": "application/json" } },
-      );
-      return;
-    } catch (error) {
-      const status = (error as { response?: { status?: number } }).response?.status ?? 0;
-      const retriable = !status || status >= 500 || status === 429;
-      if (!retriable || attempt === MAX_ATTEMPTS - 1) {
-        logger.warn(
-          { err: error, channelName: channel.name, channelTopic: channel.topic, status, attempts: attempt + 1 },
-          "ntfy channel push failed (giving up)",
-        );
-        return;
-      }
-      const delay = 500 * Math.pow(2, attempt); // 500ms → 1000ms
-      logger.warn(
-        { channelName: channel.name, status, attempt: attempt + 1, delayMs: delay },
-        "ntfy push retry after server error",
-      );
-      await new Promise((r) => setTimeout(r, delay));
-    }
+  try {
+    await postNtfyRequest(server, { topic: channel.topic, ...payload });
+  } catch (error) {
+    const status = (error as { response?: { status?: number } }).response?.status ?? 0;
+    logger.warn(
+      { err: error, channelName: channel.name, channelTopic: channel.topic, status },
+      "ntfy channel push failed (giving up)",
+    );
   }
 }
 
@@ -128,23 +137,26 @@ export async function sendNtfy(event: DetectedEvent): Promise<void> {
 
 export async function sendTestPush(server: string, topic: string): Promise<{ ok: boolean; error?: string }> {
   try {
-    await axios.post(
-      server.replace(/\/+$/, ""),
-      {
-        topic,
-        title: "Pokemon Watcher — Test",
-        message: "Wenn du das siehst, funktioniert dieser Channel.",
-        priority: 4,
-        tags: ["white_check_mark", "test_tube"],
-      },
-      { timeout: TIMEOUT_MS, headers: { "Content-Type": "application/json" } },
-    );
+    await postNtfyRequest(server, {
+      topic,
+      title: "Pokemon Watcher — Test",
+      message: "Wenn du das siehst, funktioniert dieser Channel.",
+      priority: 4,
+      tags: ["white_check_mark", "test_tube"],
+    });
     return { ok: true };
   } catch (error) {
+    const status = (error as { response?: { status?: number } }).response?.status ?? 0;
+    const fallbackMsg =
+      (error as { message?: string }).message ?? "unknown error";
     const msg =
-      error && typeof error === "object" && "message" in error
-        ? String((error as { message?: string }).message)
-        : "unknown error";
+      status === 429
+        ? "Rate-Limit (HTTP 429) — der ntfy-Server begrenzt die Pushes pro IP. Bei ntfy.sh: ~1h warten, oder eigenen ntfy-Server nutzen."
+        : status >= 500
+          ? `Server-Fehler (HTTP ${status}) — versuch's gleich nochmal oder check die Server-URL.`
+          : status > 0
+            ? `HTTP ${status} — ${fallbackMsg}`
+            : fallbackMsg;
     return { ok: false, error: msg };
   }
 }

@@ -116,7 +116,7 @@ function NtfySection() {
         <div className="text-xs text-slate-500 shrink-0">{activeCount} aktiv</div>
       </div>
 
-      <label className="block mb-3">
+      <label className="block mb-1">
         <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Server</span>
         <input
           type="url"
@@ -125,6 +125,10 @@ function NtfySection() {
           className="mt-1 w-full text-sm px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
         />
       </label>
+      <p className="text-[11px] text-slate-500 mb-3">
+        Public-Server: <code className="font-mono">https://ntfy.sh</code> (Rate-Limit ~60/h pro IP) · Self-Host:
+        eigene Domain, z.B. <code className="font-mono">https://ntfy.adogan.de</code> (kein Rate-Limit).
+      </p>
 
       <div className="space-y-2">
         {draft.channels.map((ch, i) => (
