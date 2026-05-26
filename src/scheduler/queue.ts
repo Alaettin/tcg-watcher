@@ -79,6 +79,25 @@ export async function getAllActiveJobs(): Promise<Job<ShopRunJob>[]> {
   return results.flat();
 }
 
+// Wipes both queues (waiting / delayed / completed / failed history) and
+// immediately re-creates the repeatables from the enabled-shops table.
+// Used by /admin/reset-listings-events for a true cleanroom state.
+export async function resetAllQueues(): Promise<{ obliterated: string[] }> {
+  const obliterated: string[] = [];
+  for (const q of allQueues()) {
+    try {
+      await q.obliterate({ force: true });
+      obliterated.push(q.name);
+    } catch (error) {
+      logger.warn({ err: error, queue: q.name }, "queue obliterate failed");
+    }
+  }
+  // Immediately reconcile so the repeatables are back in place — otherwise
+  // the next 60s reconcile-tick would have to do it.
+  await reconcileRepeatables();
+  return { obliterated };
+}
+
 export async function triggerShopNow(shopId: string): Promise<string> {
   const shop = await prisma.shop.findUnique({ where: { id: shopId } });
   if (!shop) throw new Error(`shop ${shopId} not found`);

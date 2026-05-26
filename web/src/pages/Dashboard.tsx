@@ -96,11 +96,22 @@ function ControlBar({
     onError: (e) => flash("err", `Start fehlgeschlagen: ${e}`),
   });
   const reset = useMutation({
-    mutationFn: () => api.post<{ eventsDeleted: number; listingsDeleted: number }>("/api/admin/reset-listings-events"),
+    mutationFn: () =>
+      api.post<{
+        eventsDeleted: number;
+        listingsDeleted: number;
+        shopsCleared: number;
+        queuesObliterated: string[];
+      }>("/api/admin/reset-listings-events"),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["heartbeat"] });
       qc.invalidateQueries({ queryKey: ["events"] });
-      flash("ok", `Gelöscht: ${r.listingsDeleted} Listings, ${r.eventsDeleted} Events`);
+      qc.invalidateQueries({ queryKey: ["shops"] });
+      qc.invalidateQueries({ queryKey: ["scheduler-status"] });
+      flash(
+        "ok",
+        `Reset: ${r.listingsDeleted} Listings · ${r.eventsDeleted} Events · ${r.shopsCleared} Shop-Stats · ${r.queuesObliterated.length} Queues`,
+      );
     },
     onError: (e) => flash("err", `Reset fehlgeschlagen: ${e}`),
   });
@@ -144,7 +155,11 @@ function ControlBar({
           ? "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200"
           : "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-200",
       )}>
-        {isPaused ? "PAUSIERT" : "LÄUFT"}
+        {isPaused
+          ? status && status.active > 0
+            ? `PAUSIERT — ${status.active} läuft noch`
+            : "PAUSIERT"
+          : "LÄUFT"}
       </span>
 
       {status && (
@@ -170,7 +185,7 @@ function ControlBar({
       </button>
 
       <button
-        onClick={() => { if (confirm("Alle Listings und Events löschen? Sets, Shops und Settings bleiben.")) reset.mutate(); }}
+        onClick={() => { if (confirm("Wirklich alles zurücksetzen?\n\nListings, Events, Shop-Statistiken und Queue-Jobs werden gelöscht. Sets, Listen und Settings bleiben. Diese Aktion ist nicht umkehrbar.")) reset.mutate(); }}
         disabled={busy}
         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-rose-100 text-rose-900 dark:bg-rose-900/30 dark:text-rose-200 text-sm disabled:opacity-50"
       >

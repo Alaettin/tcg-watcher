@@ -1,10 +1,12 @@
 import { Router } from "express";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { logger } from "../../lib/logger.js";
 import {
   getQueueStatus,
   pauseQueue,
   resumeQueue,
+  resetAllQueues,
   triggerShopNow,
 } from "../../scheduler/queue.js";
 import { sendDailyHeartbeat } from "../../notify/heartbeat.js";
@@ -44,19 +46,30 @@ adminRouter.post("/scheduler/resume", async (_req, res, next) => {
 
 adminRouter.post("/admin/reset-listings-events", async (_req, res, next) => {
   try {
-    const result = await prisma.$transaction([
+    const [eventsResult, listingsResult, shopsResult] = await prisma.$transaction([
       prisma.event.deleteMany({}),
       prisma.listing.deleteMany({}),
+      prisma.shop.updateMany({
+        data: { lastSuccessfulRun: null, lastRunStats: Prisma.JsonNull },
+      }),
     ]);
+    const queueResult = await resetAllQueues();
     invalidateSetsForShopCache();
     logger.warn(
-      { eventsDeleted: result[0].count, listingsDeleted: result[1].count },
-      "listings + events reset via api",
+      {
+        eventsDeleted: eventsResult.count,
+        listingsDeleted: listingsResult.count,
+        shopsCleared: shopsResult.count,
+        queuesObliterated: queueResult.obliterated,
+      },
+      "FULL reset via api",
     );
     res.json({
       ok: true,
-      eventsDeleted: result[0].count,
-      listingsDeleted: result[1].count,
+      eventsDeleted: eventsResult.count,
+      listingsDeleted: listingsResult.count,
+      shopsCleared: shopsResult.count,
+      queuesObliterated: queueResult.obliterated,
     });
   } catch (err) {
     next(err);

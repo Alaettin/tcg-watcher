@@ -7,7 +7,9 @@ import {
   getNtfyConfig,
   getSetting,
   setSetting,
+  invalidateSettingCache,
 } from "../../lib/settings.js";
+import { prisma } from "../../lib/prisma.js";
 import { DEFAULT_GLOBAL_NEGATIVE_TERMS } from "../../matcher/productMatcher.js";
 import { invalidateSetsForShopCache } from "../../matcher/setMatcher.js";
 import { sendTestPush } from "../../notify/ntfy.js";
@@ -55,6 +57,25 @@ settingsRouter.get("/settings", async (_req, res, next) => {
       all[SETTING_KEYS.NTFY_CONFIG] = DEFAULT_NTFY_CONFIG;
     }
     res.json(all);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Whitelist of keys that can be DELETEd (= reset to in-code default).
+// We don't want a stray DELETE to nuke ntfyConfig and silently disable pushes.
+const RESETTABLE_KEYS = new Set<string>([SETTING_KEYS.GLOBAL_NEGATIVE_TERMS]);
+
+settingsRouter.delete("/settings/:key", async (req, res, next) => {
+  try {
+    const key = req.params.key;
+    if (!RESETTABLE_KEYS.has(key)) {
+      res.status(400).json({ error: `key ${key} is not resettable via DELETE` });
+      return;
+    }
+    await prisma.setting.deleteMany({ where: { key } });
+    invalidateSettingCache(key);
+    res.status(204).end();
   } catch (err) {
     next(err);
   }

@@ -12,22 +12,24 @@ const STOP_WORDS = new Set(["und", "and", "the", "der", "die", "das", "ein", "ei
 
 // Fallback / initial seed values. The runtime list lives in the `Setting` table
 // under key `SETTING_KEYS.GLOBAL_NEGATIVE_TERMS` and is editable via the UI.
+// Generic terms that catch obviously non-TCG products (books, calendars,
+// history toys) at retailers like Thalia/Müller that mix Pokémon-branded
+// merchandise with the actual sealed TCG products we care about. Old set-name
+// entries were removed when SetList took over — those need to MATCH now, not
+// be filtered out.
 export const DEFAULT_GLOBAL_NEGATIVE_TERMS = [
-  // Scarlet & Violet era
-  "Scarlet & Violet", "Paldea Evolved", "Obsidian Flames", "151",
-  "Paradox Rift", "Temporal Forces", "Twilight Masquerade", "Shrouded Fable",
-  "Stellar Crown", "Surging Sparks", "Prismatic Evolutions", "Journey Together",
-  "Destined Rivals", "Black Bolt", "White Flare", "Mega Evolution",
-  "Battle Partners",
-  // Sword & Shield era
-  "Sword & Shield", "Vivid Voltage", "Battle Styles", "Chilling Reign",
-  "Evolving Skies", "Fusion Strike", "Brilliant Stars", "Astral Radiance",
-  "Lost Origin", "Silver Tempest", "Crown Zenith",
-  // Distractors
-  "Booster Bundle", "Sleeved Booster", "Booster Pack einzeln",
-  // Books / calendars (Thalia, Müller)
-  "Kalender", "Broschurkalender", "Buch", "eBook", "Hörbuch", "Roman", "Comic",
-  "Day-To-Day", "Day to Day", "Quiz", "Geschichte", "Krieg",
+  "Kalender",
+  "Broschurkalender",
+  "Buch",
+  "eBook",
+  "Hörbuch",
+  "Roman",
+  "Comic",
+  "Day-To-Day",
+  "Day to Day",
+  "Quiz",
+  "Geschichte",
+  "Krieg",
 ];
 
 function tokenize(input: string): string[] {

@@ -44,7 +44,6 @@ export function SettingsPage() {
       <h1 className="text-xl font-semibold">Settings</h1>
       <NtfySection />
       <NegativesSection />
-      <EnvInfoSection />
     </div>
   );
 }
@@ -323,6 +322,14 @@ function NegativesSection() {
     },
   });
 
+  const resetToDefaults = useMutation({
+    mutationFn: () => api.delete("/api/settings/globalNegativeTerms"),
+    onSuccess: () => {
+      // Backend hat die DB-Row gelöscht — der nächste GET liefert die in-Code Defaults
+      qc.invalidateQueries({ queryKey: ["settings"] });
+    },
+  });
+
   const onSave = () => {
     const terms = draft.split("\n").map((s) => s.trim()).filter((s) => s.length > 0);
     save.mutate(terms);
@@ -332,6 +339,16 @@ function NegativesSection() {
     if (settings.data?.globalNegativeTerms) {
       setDraft(settings.data.globalNegativeTerms.join("\n"));
       setDirty(false);
+    }
+  };
+
+  const onResetToDefaults = () => {
+    if (
+      window.confirm(
+        "Negative-Terms auf System-Standardwerte zurücksetzen?\n\nDeine aktuellen Einträge gehen verloren.",
+      )
+    ) {
+      resetToDefaults.mutate();
     }
   };
 
@@ -356,7 +373,7 @@ function NegativesSection() {
         className="w-full font-mono text-xs px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 leading-snug"
         placeholder={"Twilight Masquerade\nKalender\n..."}
       />
-      <div className="flex items-center gap-2 mt-3">
+      <div className="flex items-center gap-2 mt-3 flex-wrap">
         <button
           onClick={onSave}
           disabled={!dirty || save.isPending}
@@ -372,21 +389,16 @@ function NegativesSection() {
         {save.isSuccess && !dirty && (
           <span className="text-xs text-emerald-700 dark:text-emerald-400">Gespeichert.</span>
         )}
+        <button
+          onClick={onResetToDefaults}
+          disabled={resetToDefaults.isPending}
+          title="Setzt die Liste auf die System-Standardwerte zurück (überschreibt deine Einträge)"
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded border border-slate-300 dark:border-slate-700 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 ml-auto"
+        >
+          <RotateCcw size={14} /> {resetToDefaults.isPending ? "Setze zurück…" : "Auf Standard zurücksetzen"}
+        </button>
       </div>
     </section>
   );
 }
 
-function EnvInfoSection() {
-  return (
-    <section className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 text-sm space-y-2">
-      <h2 className="font-semibold">Aus der <code className="font-mono px-1 bg-slate-100 dark:bg-slate-800 rounded">.env</code> (nicht editierbar)</h2>
-      <ul className="list-disc list-inside text-slate-600 dark:text-slate-400 space-y-1">
-        <li><code className="font-mono">WEB_USERNAME</code> / <code className="font-mono">WEB_PASSWORD</code> — Login</li>
-        <li><code className="font-mono">LOG_FILE</code> — Pfad zur Logdatei (default <code className="font-mono">data/events.log</code>)</li>
-        <li>Drop-Days sind hartkodiert in <code className="font-mono">src/scheduler/dropDay.ts</code></li>
-        <li><code className="font-mono">NTFY_TOPIC</code> / <code className="font-mono">NTFY_SERVER</code> — wird nicht mehr gelesen, oben einstellen</li>
-      </ul>
-    </section>
-  );
-}
