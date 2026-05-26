@@ -5,6 +5,7 @@ import { getNtfyConfig, type NtfyChannel, type NtfyConfig } from "../lib/setting
 import type { DetectedEvent } from "../detector/eventDetector.js";
 
 const TIMEOUT_MS = 5_000;
+const MAX_ATTEMPTS = 3;
 
 const TITLES: Record<EventType, string> = {
   NEW_LISTING: "Neues Listing",
@@ -58,17 +59,31 @@ async function postToChannel(
   payload: RawPushPayload,
 ): Promise<void> {
   const trimmedServer = server.replace(/\/+$/, "");
-  try {
-    await axios.post(
-      trimmedServer,
-      { topic: channel.topic, ...payload },
-      { timeout: TIMEOUT_MS, headers: { "Content-Type": "application/json" } },
-    );
-  } catch (error) {
-    logger.warn(
-      { err: error, channelName: channel.name, channelTopic: channel.topic },
-      "ntfy channel push failed",
-    );
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      await axios.post(
+        trimmedServer,
+        { topic: channel.topic, ...payload },
+        { timeout: TIMEOUT_MS, headers: { "Content-Type": "application/json" } },
+      );
+      return;
+    } catch (error) {
+      const status = (error as { response?: { status?: number } }).response?.status ?? 0;
+      const retriable = !status || status >= 500 || status === 429;
+      if (!retriable || attempt === MAX_ATTEMPTS - 1) {
+        logger.warn(
+          { err: error, channelName: channel.name, channelTopic: channel.topic, status, attempts: attempt + 1 },
+          "ntfy channel push failed (giving up)",
+        );
+        return;
+      }
+      const delay = 500 * Math.pow(2, attempt); // 500ms → 1000ms
+      logger.warn(
+        { channelName: channel.name, status, attempt: attempt + 1, delayMs: delay },
+        "ntfy push retry after server error",
+      );
+      await new Promise((r) => setTimeout(r, delay));
+    }
   }
 }
 

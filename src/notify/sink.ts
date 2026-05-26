@@ -52,8 +52,16 @@ export async function notify(event: DetectedEvent): Promise<void> {
   });
 }
 
+// Small gap between events so a single shop-run with many matches doesn't
+// burst-fire dozens of requests at ntfy.sh (the public instance rate-limits
+// around 60 req/min per IP and starts returning 502 under sudden load).
+const INTER_EVENT_DELAY_MS = 150;
+
 export async function notifyAll(events: DetectedEvent[]): Promise<void> {
-  for (const e of events) {
-    await notify(e);
+  let first = true;
+  for (const event of events) {
+    if (!first) await new Promise((r) => setTimeout(r, INTER_EVENT_DELAY_MS));
+    first = false;
+    await notify(event);
   }
 }

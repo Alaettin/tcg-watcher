@@ -71,13 +71,26 @@ export async function runShop(shopId: string): Promise<RunShopResult> {
     return emptyResult(shopId, Date.now() - start);
   }
 
+  // Capture before any persist write touches lastSuccessfulRun — used below to
+  // suppress the ntfy flood that would otherwise hit on the first scan after
+  // a reset or for a freshly-seeded shop (every listing looks "new").
+  const wasFirstScan = shop.lastSuccessfulRun === null;
+
   // Wrap the post-search pipeline in try/catch so that a transient DB or
   // ntfy hiccup doesn't fail the whole BullMQ job (which would skip the
   // next scheduled tick) — we'd rather log and let the repeatable retry.
   try {
     const matches = await matchListingsToSets(listings, activeSets);
     const events = await detectAndPersist(shopId, matches);
-    await notifyAll(events);
+
+    if (wasFirstScan && events.length > 0) {
+      log.warn(
+        { suppressed: events.length, reason: "first-scan-after-reset-or-fresh-install" },
+        "skipping ntfy push for first-scan events — baseline established",
+      );
+    } else if (events.length > 0) {
+      await notifyAll(events);
+    }
 
     const newListings = events.filter((e) => e.type === "NEW_LISTING").length;
     const restocks = events.filter((e) => e.type === "RESTOCK").length;
