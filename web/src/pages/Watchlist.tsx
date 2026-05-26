@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, X, Save, CheckSquare, Square } from "lucide-react";
-import clsx from "clsx";
+import { Plus, Pencil, Trash2, X, Save } from "lucide-react";
 import { api } from "../lib/api";
 import type { SetEntry, Variant } from "../lib/types";
 import { formatEur } from "../lib/format";
@@ -40,21 +40,6 @@ export function WatchlistPage() {
     (a, b) => eraOrder.indexOf(a) - eraOrder.indexOf(b),
   );
 
-  const toggle = useMutation({
-    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
-      api.patch(`/api/sets/${id}`, { active }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["sets"] }),
-  });
-
-  const bulkToggle = useMutation({
-    mutationFn: (active: boolean) => api.post("/api/sets/bulk", { active }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sets"] });
-      qc.invalidateQueries({ queryKey: ["heartbeat"] });
-    },
-  });
-
-  const totalActive = sets.data?.filter((s) => s.active).length ?? 0;
   const totalSets = sets.data?.length ?? 0;
 
   return (
@@ -63,40 +48,20 @@ export function WatchlistPage() {
         <div>
           <h1 className="text-xl font-semibold">Sets</h1>
           <div className="text-xs text-slate-500 mt-0.5">
-            {totalSets} Sets gesamt • {totalActive} aktiv
+            {totalSets} Sets · Stammdaten (Name, Variants, Such-Begriffe). Welche Sets
+            ein Shop trackt, regeln{" "}
+            <Link to="/lists" className="underline hover:text-slate-700 dark:hover:text-slate-300">
+              Listen
+            </Link>
+            .
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => bulkToggle.mutate(true)}
-            disabled={bulkToggle.isPending || totalActive === totalSets || totalSets === 0}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded border border-slate-300 dark:border-slate-700 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <CheckSquare size={14} /> Alle aktivieren
-          </button>
-          <button
-            onClick={() => {
-              if (
-                totalActive > 0 &&
-                window.confirm(
-                  `Wirklich alle ${totalActive} aktiven Sets deaktivieren?\n\nDu bekommst dann keine Pushes mehr, bis du wieder Sets aktivierst.`,
-                )
-              ) {
-                bulkToggle.mutate(false);
-              }
-            }}
-            disabled={bulkToggle.isPending || totalActive === 0}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded border border-slate-300 dark:border-slate-700 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Square size={14} /> Alle deaktivieren
-          </button>
-          <button
-            onClick={() => setEditing("new")}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-sm font-medium"
-          >
-            <Plus size={14} /> Neues Set
-          </button>
-        </div>
+        <button
+          onClick={() => setEditing("new")}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-sm font-medium"
+        >
+          <Plus size={14} /> Neues Set
+        </button>
       </div>
 
       {sets.isLoading && <div className="text-sm text-slate-500">Lade Sets…</div>}
@@ -106,12 +71,7 @@ export function WatchlistPage() {
           <h2 className="text-xs uppercase tracking-wide text-slate-500 mb-2 font-semibold">{era}</h2>
           <div className="grid gap-2">
             {(grouped.get(era) ?? []).map((s) => (
-              <SetRow
-                key={s.id}
-                set={s}
-                onToggle={(active) => toggle.mutate({ id: s.id, active })}
-                onEdit={() => setEditing(s)}
-              />
+              <SetRow key={s.id} set={s} onEdit={() => setEditing(s)} />
             ))}
           </div>
         </section>
@@ -133,29 +93,13 @@ export function WatchlistPage() {
 
 function SetRow({
   set,
-  onToggle,
   onEdit,
 }: {
   set: SetEntry;
-  onToggle: (active: boolean) => void;
   onEdit: () => void;
 }) {
   return (
-    <div
-      className={clsx(
-        "rounded-lg border p-3 transition flex items-center gap-3",
-        set.active
-          ? "border-emerald-300 bg-emerald-50/40 dark:border-emerald-800/60 dark:bg-emerald-900/10"
-          : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900",
-      )}
-    >
-      <input
-        type="checkbox"
-        checked={set.active}
-        onChange={(e) => onToggle(e.target.checked)}
-        className="h-4 w-4 shrink-0"
-        aria-label={`${set.name} aktivieren`}
-      />
+    <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-3 transition flex items-center gap-3">
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2 flex-wrap">
           {set.shortCode && (

@@ -3,6 +3,8 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { triggerShopNow } from "../../scheduler/queue.js";
 import { getCurrentIntervalSeconds } from "../../scheduler/dropDay.js";
+import { familyOf } from "../../scheduler/adapterFamily.js";
+import { invalidateSetsForShopCache } from "../../matcher/setMatcher.js";
 
 export const shopsRouter = Router();
 
@@ -11,6 +13,8 @@ const PatchSchema = z.object({
   pollIntervalSeconds: z.number().int().min(10).max(86400).optional(),
   dropDayIntervalSeconds: z.number().int().min(5).max(3600).optional(),
   displayName: z.string().min(1).max(120).optional(),
+  // null = remove the per-shop override and fall back to the family default
+  setListId: z.string().nullable().optional(),
 });
 
 shopsRouter.get("/shops", async (_req, res, next) => {
@@ -37,6 +41,7 @@ shopsRouter.get("/shops", async (_req, res, next) => {
         const effectiveS = getCurrentIntervalSeconds(s);
         return {
           ...s,
+          family: familyOf(s),
           effectiveIntervalSeconds: effectiveS,
           eventCount24h: eventsByShop.get(s.id) ?? 0,
           online: s.lastSuccessfulRun
@@ -61,7 +66,11 @@ shopsRouter.patch("/shops/:id", async (req, res, next) => {
       where: { id: req.params.id },
       data: parsed.data,
     });
-    res.json(updated);
+    // Set-list change must propagate immediately, not after 60s cache TTL
+    if ("setListId" in parsed.data) {
+      invalidateSetsForShopCache(req.params.id);
+    }
+    res.json({ ...updated, family: familyOf(updated) });
   } catch (err) {
     next(err);
   }

@@ -9,7 +9,7 @@ import {
 } from "../../scheduler/queue.js";
 import { sendDailyHeartbeat } from "../../notify/heartbeat.js";
 import { closeBrowser } from "../../adapters/playwright-browser.js";
-import { invalidateActiveSetsCache } from "../../matcher/setMatcher.js";
+import { invalidateSetsForShopCache } from "../../matcher/setMatcher.js";
 
 export const adminRouter = Router();
 
@@ -48,7 +48,7 @@ adminRouter.post("/admin/reset-listings-events", async (_req, res, next) => {
       prisma.event.deleteMany({}),
       prisma.listing.deleteMany({}),
     ]);
-    invalidateActiveSetsCache();
+    invalidateSetsForShopCache();
     logger.warn(
       { eventsDeleted: result[0].count, listingsDeleted: result[1].count },
       "listings + events reset via api",

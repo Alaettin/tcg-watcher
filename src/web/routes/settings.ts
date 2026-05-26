@@ -9,6 +9,7 @@ import {
   setSetting,
 } from "../../lib/settings.js";
 import { DEFAULT_GLOBAL_NEGATIVE_TERMS } from "../../matcher/productMatcher.js";
+import { invalidateSetsForShopCache } from "../../matcher/setMatcher.js";
 import { sendTestPush } from "../../notify/ntfy.js";
 
 export const settingsRouter = Router();
@@ -32,7 +33,14 @@ const NtfyConfigSchema = z.object({
 const VALIDATORS: Record<string, z.ZodTypeAny> = {
   [SETTING_KEYS.GLOBAL_NEGATIVE_TERMS]: z.array(z.string().min(1).max(120)).max(500),
   [SETTING_KEYS.NTFY_CONFIG]: NtfyConfigSchema,
+  [SETTING_KEYS.DEFAULT_FAST_SET_LIST_ID]: z.string().nullable(),
+  [SETTING_KEYS.DEFAULT_SLOW_SET_LIST_ID]: z.string().nullable(),
 };
+
+const SET_RESOLUTION_KEYS = new Set<string>([
+  SETTING_KEYS.DEFAULT_FAST_SET_LIST_ID,
+  SETTING_KEYS.DEFAULT_SLOW_SET_LIST_ID,
+]);
 
 settingsRouter.get("/settings", async (_req, res, next) => {
   try {
@@ -66,6 +74,11 @@ settingsRouter.put("/settings/:key", async (req, res, next) => {
       return;
     }
     await setSetting(key, parsed.data);
+    // Family-default changes affect what every shop's matcher sees, so flush
+    // the per-shop cache immediately rather than waiting for the 60s TTL.
+    if (SET_RESOLUTION_KEYS.has(key)) {
+      invalidateSetsForShopCache();
+    }
     res.json({ key, value: parsed.data });
   } catch (err) {
     next(err);

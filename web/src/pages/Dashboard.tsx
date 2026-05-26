@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, AlertTriangle, Box, Layers, Loader2, Pause, Play, Radio, RefreshCw, Send, Trash2, Zap } from "lucide-react";
+import { Activity, AlertTriangle, Box, Loader2, Pause, Play, Radio, RefreshCw, Send, Settings, Trash2, Zap } from "lucide-react";
 import clsx from "clsx";
 import { api, useEventStream } from "../lib/api";
 import { ago } from "../lib/format";
@@ -39,7 +39,7 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {hb && hb.activeSetCount === 0 && <NoActiveSetsAlert />}
+      {hb && hb.configuredShopCount === 0 && <NoConfiguredShopsAlert />}
       <ControlBar status={schedStatus.data} onStatusChange={() => qc.invalidateQueries({ queryKey: ["scheduler-status"] })} />
 
       <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -50,9 +50,9 @@ export function DashboardPage() {
           total={hb?.totalShopCount ?? 0}
         />
         <Stat
-          label="Aktive Sets"
-          value={hb ? `${hb.activeSetCount} / ${hb.totalSetCount}` : "—"}
-          icon={<Layers size={16} />}
+          label="Konfiguriert"
+          value={hb ? `${hb.configuredShopCount} / ${hb.enabledCount}` : "—"}
+          icon={<Settings size={16} />}
         />
         <Stat label="Listings getrackt" value={hb?.listingCount ?? "—"} icon={<Box size={16} />} />
         <Stat label="Events 24h" value={hb?.totalEvents24h ?? "—"} icon={<Radio size={16} />} />
@@ -432,23 +432,23 @@ function FamilyBadge({ family }: { family: ShopFamily }) {
   );
 }
 
-function NoActiveSetsAlert() {
+function NoConfiguredShopsAlert() {
   return (
     <div className="rounded-lg border border-rose-300 dark:border-rose-700 bg-rose-50 dark:bg-rose-900/20 p-4 flex items-center gap-3">
       <AlertTriangle className="text-rose-600 dark:text-rose-400 shrink-0" size={20} />
       <div className="flex-1 min-w-0">
         <div className="font-medium text-rose-800 dark:text-rose-200">
-          Keine aktiven Sets — du bekommst keine Pushes.
+          Kein Shop hat eine Set-Liste — es werden keine Suchen gestartet.
         </div>
         <div className="text-sm text-rose-700 dark:text-rose-300 mt-0.5">
-          Aktiviere mindestens ein Set, damit Listings als Events erkannt und gepusht werden.
+          Lege eine Liste an und ordne sie als Default für eine Family zu, oder weise sie einzelnen Shops zu.
         </div>
       </div>
       <Link
-        to="/watchlist"
+        to="/lists"
         className="px-3 py-1.5 rounded bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium shrink-0"
       >
-        Zu den Sets →
+        Zu den Listen →
       </Link>
     </div>
   );

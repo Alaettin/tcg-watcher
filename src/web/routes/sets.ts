@@ -1,10 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
-import { invalidateActiveSetsCache } from "../../matcher/setMatcher.js";
+import { invalidateSetsForShopCache } from "../../matcher/setMatcher.js";
 
 export const setsRouter = Router();
 
+// Set.active is deprecated since the SetList refactor. The field stays in the
+// DB schema for one more release cycle but is no longer accepted via API —
+// tracking is now controlled by SetList membership + Shop.setListId.
 const SetPatchSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   shortCode: z.string().nullable().optional(),
@@ -14,7 +17,6 @@ const SetPatchSchema = z.object({
   era: z.string().nullable().optional(),
   searchTerms: z.array(z.string().min(1)).min(1).optional(),
   negativeTerms: z.array(z.string()).optional(),
-  active: z.boolean().optional(),
 });
 
 const SetCreateSchema = SetPatchSchema.extend({
@@ -38,18 +40,6 @@ setsRouter.get("/sets", async (_req, res, next) => {
       include: { variants: { orderBy: { kind: "asc" } } },
     });
     res.json(sets);
-  } catch (err) {
-    next(err);
-  }
-});
-
-setsRouter.post("/sets/bulk", async (req, res, next) => {
-  const schema = z.object({ active: z.boolean() });
-  try {
-    const { active } = schema.parse(req.body);
-    const result = await prisma.set.updateMany({ data: { active } });
-    invalidateActiveSetsCache();
-    res.json({ updated: result.count, active });
   } catch (err) {
     next(err);
   }
@@ -103,12 +93,11 @@ setsRouter.post("/sets", async (req, res, next) => {
         era: d.era ?? null,
         searchTerms: d.searchTerms,
         negativeTerms: d.negativeTerms ?? [],
-        active: d.active ?? true,
         isPreset: false,
       },
       include: { variants: true },
     });
-    invalidateActiveSetsCache();
+    invalidateSetsForShopCache();
     res.status(201).json(created);
   } catch (err) {
     next(err);
@@ -136,7 +125,7 @@ setsRouter.patch("/sets/:id", async (req, res, next) => {
       },
       include: { variants: { orderBy: { kind: "asc" } } },
     });
-    invalidateActiveSetsCache();
+    invalidateSetsForShopCache();
     res.json(updated);
   } catch (err) {
     next(err);
@@ -146,7 +135,7 @@ setsRouter.patch("/sets/:id", async (req, res, next) => {
 setsRouter.delete("/sets/:id", async (req, res, next) => {
   try {
     await prisma.set.delete({ where: { id: req.params.id } });
-    invalidateActiveSetsCache();
+    invalidateSetsForShopCache();
     res.status(204).end();
   } catch (err) {
     next(err);
@@ -170,7 +159,7 @@ setsRouter.post("/sets/:id/variants", async (req, res, next) => {
         ean: parsed.data.ean ?? null,
       },
     });
-    invalidateActiveSetsCache();
+    invalidateSetsForShopCache();
     res.status(201).json(created);
   } catch (err) {
     next(err);
@@ -188,7 +177,7 @@ setsRouter.patch("/sets/:id/variants/:variantId", async (req, res, next) => {
       where: { id: req.params.variantId },
       data: parsed.data,
     });
-    invalidateActiveSetsCache();
+    invalidateSetsForShopCache();
     res.json(updated);
   } catch (err) {
     next(err);
@@ -198,7 +187,7 @@ setsRouter.patch("/sets/:id/variants/:variantId", async (req, res, next) => {
 setsRouter.delete("/sets/:id/variants/:variantId", async (req, res, next) => {
   try {
     await prisma.variant.delete({ where: { id: req.params.variantId } });
-    invalidateActiveSetsCache();
+    invalidateSetsForShopCache();
     res.status(204).end();
   } catch (err) {
     next(err);

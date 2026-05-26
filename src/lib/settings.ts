@@ -3,6 +3,8 @@ import { prisma } from "./prisma.js";
 export const SETTING_KEYS = {
   GLOBAL_NEGATIVE_TERMS: "globalNegativeTerms",
   NTFY_CONFIG: "ntfyConfig",
+  DEFAULT_FAST_SET_LIST_ID: "defaultFastSetListId",
+  DEFAULT_SLOW_SET_LIST_ID: "defaultSlowSetListId",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
@@ -26,6 +28,19 @@ export const DEFAULT_NTFY_CONFIG: NtfyConfig = {
 
 export async function getNtfyConfig(): Promise<NtfyConfig> {
   return getSetting<NtfyConfig>(SETTING_KEYS.NTFY_CONFIG, DEFAULT_NTFY_CONFIG);
+}
+
+export interface FamilyDefaults {
+  fast: string | null;
+  slow: string | null;
+}
+
+export async function getFamilyDefaults(): Promise<FamilyDefaults> {
+  const [fast, slow] = await Promise.all([
+    getSetting<string | null>(SETTING_KEYS.DEFAULT_FAST_SET_LIST_ID, null),
+    getSetting<string | null>(SETTING_KEYS.DEFAULT_SLOW_SET_LIST_ID, null),
+  ]);
+  return { fast, slow };
 }
 
 const CACHE_TTL_MS = 60_000;

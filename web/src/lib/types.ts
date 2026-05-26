@@ -12,9 +12,11 @@ export interface Shop {
   displayName: string;
   baseUrl: string;
   adapterType: string;
+  family: ShopFamily;
   enabled: boolean;
   pollIntervalSeconds: number;
   dropDayIntervalSeconds: number;
+  setListId: string | null;
   lastSuccessfulRun: string | null;
   eventCount24h: number;
   online: boolean;
@@ -86,9 +88,24 @@ export interface SetEntry {
   era: string | null;
   searchTerms: string[];
   negativeTerms: string[];
-  active: boolean;
   isPreset: boolean;
   variants: Variant[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SetList {
+  id: string;
+  name: string;
+  description: string | null;
+  isSystem: boolean;
+  itemCount: number;
+  shopCount?: number;
+}
+
+export interface SetListDetail extends SetList {
+  setIds: string[];
+  sets: Array<{ id: string; name: string; era: string | null; releaseDate: string | null }>;
   createdAt: string;
   updatedAt: string;
 }
@@ -153,7 +170,8 @@ export interface HeartbeatSnapshot {
   onlineCount: number;
   offlineCount: number;
   listingCount: number;
-  activeSetCount: number;
+  configuredShopCount: number;
+  unconfiguredShopCount: number;
   totalSetCount: number;
   events24h: Array<{ type: EventType; count: number }>;
   totalEvents24h: number;

@@ -11,6 +11,7 @@ import { eventsRouter } from "./routes/events.js";
 import { listingsRouter } from "./routes/listings.js";
 import { settingsRouter } from "./routes/settings.js";
 import { setsRouter } from "./routes/sets.js";
+import { listsRouter } from "./routes/lists.js";
 import { adminRouter } from "./routes/admin.js";
 
 const PORT = Number(process.env.WEB_PORT ?? 3000);
@@ -64,6 +65,7 @@ export async function startWebServer(): Promise<{ stop: () => Promise<void> }> {
   app.use("/api", listingsRouter);
   app.use("/api", settingsRouter);
   app.use("/api", setsRouter);
+  app.use("/api", listsRouter);
   app.use("/api", adminRouter);
 
   if (existsSync(STATIC_DIR)) {

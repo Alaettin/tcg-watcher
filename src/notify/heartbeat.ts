@@ -4,6 +4,7 @@ import { logger } from "../lib/logger.js";
 import { getAllActiveJobs } from "../scheduler/queue.js";
 import { getCurrentIntervalSeconds } from "../scheduler/dropDay.js";
 import { familyOf, type ShopFamily } from "../scheduler/adapterFamily.js";
+import { getFamilyDefaults } from "../lib/settings.js";
 import { sendNtfyRaw } from "./ntfy.js";
 
 export interface ShopRunStats {
@@ -47,7 +48,11 @@ export interface HeartbeatSnapshot {
   onlineCount: number;
   offlineCount: number;
   listingCount: number;
-  activeSetCount: number;
+  // Number of enabled shops that resolve to a non-null set list (either via
+  // per-shop override or the family default). Unconfigured shops get skipped
+  // by the worker, so this is the "actually doing something" count.
+  configuredShopCount: number;
+  unconfiguredShopCount: number;
   totalSetCount: number;
   events24h: Array<{ type: string; count: number }>;
   totalEvents24h: number;
@@ -105,7 +110,7 @@ export async function collectHeartbeat(): Promise<HeartbeatSnapshot> {
   const since = new Date(Date.now() - 24 * 3600 * 1000);
   const now = Date.now();
 
-  const [allShops, events24h, listingCount, activeSetCount, totalSetCount] = await Promise.all([
+  const [allShops, events24h, listingCount, totalSetCount, familyDefaults] = await Promise.all([
     prisma.shop.findMany({ orderBy: { id: "asc" } }),
     prisma.event.groupBy({
       by: ["type"],
@@ -113,14 +118,21 @@ export async function collectHeartbeat(): Promise<HeartbeatSnapshot> {
       _count: { _all: true },
     }),
     prisma.listing.count(),
-    prisma.set.count({ where: { active: true } }),
     prisma.set.count(),
+    getFamilyDefaults(),
   ]);
 
   const enabledShops = allShops.filter((s) => s.enabled);
   const shopMap = new Map(
     allShops.map((s) => [s.id, { displayName: s.displayName, adapterType: s.adapterType }]),
   );
+
+  const configuredShopCount = enabledShops.filter((s) => {
+    const fam = familyOf(s);
+    const effective = s.setListId ?? (fam === "fast" ? familyDefaults.fast : familyDefaults.slow);
+    return Boolean(effective);
+  }).length;
+  const unconfiguredShopCount = enabledShops.length - configuredShopCount;
 
   const currentlyRunning = await collectCurrentlyRunning(shopMap);
 
@@ -170,7 +182,8 @@ export async function collectHeartbeat(): Promise<HeartbeatSnapshot> {
     onlineCount,
     offlineCount,
     listingCount,
-    activeSetCount,
+    configuredShopCount,
+    unconfiguredShopCount,
     totalSetCount,
     events24h: events24h.map((e) => ({ type: e.type, count: e._count._all })),
     totalEvents24h: events24h.reduce((sum, e) => sum + e._count._all, 0),

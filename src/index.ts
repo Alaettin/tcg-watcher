@@ -12,6 +12,7 @@ import { seedShops } from "./seed/shops.js";
 import { seedProducts } from "./seed/products.js";
 import { seedSettings } from "./seed/settings.js";
 import { seedSetPresets } from "./seed/sets.js";
+import { seedSetLists } from "./seed/setLists.js";
 import { startScheduler } from "./scheduler/queue.js";
 import { runShop } from "./worker/runShop.js";
 import { closeBrowser } from "./adapters/playwright-browser.js";
@@ -23,6 +24,7 @@ async function main() {
   await seedShops();
   await seedSettings();
   await seedSetPresets();
+  await seedSetLists();
   const products = await seedProducts();
   logger.info({ products: products.length }, "watchlist ready");
 

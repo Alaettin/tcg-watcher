@@ -1,5 +1,6 @@
 import { prisma } from "../lib/prisma.js";
-import { getSetting, SETTING_KEYS } from "../lib/settings.js";
+import { getSetting, getFamilyDefaults, SETTING_KEYS } from "../lib/settings.js";
+import { familyOf } from "../scheduler/adapterFamily.js";
 import { DEFAULT_GLOBAL_NEGATIVE_TERMS } from "./productMatcher.js";
 import type { RawListing } from "../adapters/ShopAdapter.js";
 
@@ -11,7 +12,7 @@ export interface SetMatchResult {
   confidence: number;
 }
 
-interface ActiveSet {
+export interface ActiveSet {
   id: string;
   name: string;
   searchTerms: string[];
@@ -75,22 +76,35 @@ function detectKind(title: string): string | null {
 
 const MIN_CONFIDENCE = 0.4;
 
-const CACHE_TTL_MS = 60_000;
-let cache: { loadedAt: number; sets: ActiveSet[] } | null = null;
+// Per-shop cache: resolved set list TTL'd for 60s. Avoids hitting the DB
+// for every poll while still picking up list-membership changes within a
+// minute (or instantly via invalidateSetsForShopCache after a write).
+const SETS_CACHE_TTL_MS = 60_000;
+const setsForShopCache = new Map<string, { loadedAt: number; sets: ActiveSet[] }>();
 
-export function invalidateActiveSetsCache(): void {
-  cache = null;
+export function invalidateSetsForShopCache(shopId?: string): void {
+  if (shopId) {
+    setsForShopCache.delete(shopId);
+  } else {
+    setsForShopCache.clear();
+  }
 }
 
-export async function getActiveSets(): Promise<ActiveSet[]> {
-  if (cache && Date.now() - cache.loadedAt < CACHE_TTL_MS) {
-    return cache.sets;
-  }
-  const rows = await prisma.set.findMany({
-    where: { active: true },
-    include: { variants: true },
-  });
-  const sets: ActiveSet[] = rows.map((s) => ({
+function toActiveSet(s: {
+  id: string;
+  name: string;
+  searchTerms: string[];
+  negativeTerms: string[];
+  variants: Array<{
+    id: string;
+    kind: string;
+    displayName: string;
+    uvpEur: number | null;
+    uvpToleranceEur: number;
+    ean: string | null;
+  }>;
+}): ActiveSet {
+  return {
     id: s.id,
     name: s.name,
     searchTerms: s.searchTerms,
@@ -103,13 +117,45 @@ export async function getActiveSets(): Promise<ActiveSet[]> {
       uvpToleranceEur: v.uvpToleranceEur,
       ean: v.ean,
     })),
-  }));
-  cache = { loadedAt: Date.now(), sets };
+  };
+}
+
+export interface ShopForSetResolution {
+  id: string;
+  adapterType: string;
+  setListId: string | null;
+}
+
+export async function getSetsForShop(shop: ShopForSetResolution): Promise<ActiveSet[]> {
+  const cached = setsForShopCache.get(shop.id);
+  if (cached && Date.now() - cached.loadedAt < SETS_CACHE_TTL_MS) {
+    return cached.sets;
+  }
+
+  const family = familyOf(shop);
+  const familyDefaults = await getFamilyDefaults();
+  const effectiveListId =
+    shop.setListId ?? (family === "fast" ? familyDefaults.fast : familyDefaults.slow);
+
+  if (!effectiveListId) {
+    setsForShopCache.set(shop.id, { loadedAt: Date.now(), sets: [] });
+    return [];
+  }
+
+  const list = await prisma.setList.findUnique({
+    where: { id: effectiveListId },
+    include: { items: { include: { set: { include: { variants: true } } } } },
+  });
+
+  const sets = (list?.items ?? []).map((i) => toActiveSet(i.set));
+  setsForShopCache.set(shop.id, { loadedAt: Date.now(), sets });
   return sets;
 }
 
-export async function matchListingsToSets(listings: RawListing[]): Promise<SetMatchResult[]> {
-  const activeSets = await getActiveSets();
+export async function matchListingsToSets(
+  listings: RawListing[],
+  activeSets: ActiveSet[],
+): Promise<SetMatchResult[]> {
   if (activeSets.length === 0) return [];
 
   const globalNegatives = await getSetting<string[]>(

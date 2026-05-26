@@ -33,9 +33,13 @@ model Shop {
   enabled                Boolean   @default(true)
   pollIntervalSeconds    Int       @default(120)
   dropDayIntervalSeconds Int       @default(10)
+  setListId              String?
+  setList                SetList?  @relation(fields: [setListId], references: [id], onDelete: SetNull)
   listings               Listing[]
   lastSuccessfulRun      DateTime?
   lastRunStats           Json?
+
+  @@index([setListId])
 }
 
 model Listing {
@@ -64,24 +68,49 @@ model Listing {
 }
 
 model Set {
-  id            String    @id
-  name          String
-  shortCode     String?
-  description   String?
-  releaseDate   DateTime?
-  language      String    @default("DE")
-  era           String?
-  searchTerms   String[]
-  negativeTerms String[]
-  active        Boolean   @default(false)
-  isPreset      Boolean   @default(false)
-  variants      Variant[]
-  listings      Listing[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id              String        @id
+  name            String
+  shortCode       String?
+  description     String?
+  releaseDate     DateTime?
+  language        String        @default("DE")
+  era             String?
+  searchTerms     String[]
+  negativeTerms   String[]
+  // active is deprecated — set-tracking is now controlled by SetList
+  // membership. Kept for backwards-compat, dropped in a later migration.
+  active          Boolean       @default(false)
+  isPreset        Boolean       @default(false)
+  variants        Variant[]
+  listings        Listing[]
+  listMemberships SetListItem[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   @@index([active])
   @@index([era])
+}
+
+model SetList {
+  id          String        @id @default(cuid())
+  name        String        @unique
+  description String?
+  isSystem    Boolean       @default(false)
+  items       SetListItem[]
+  shops       Shop[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model SetListItem {
+  setListId String
+  setId     String
+  setList   SetList @relation(fields: [setListId], references: [id], onDelete: Cascade)
+  set       Set     @relation(fields: [setId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([setListId, setId])
+  @@index([setId])
 }
 
 model Variant {

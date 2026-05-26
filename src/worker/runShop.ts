@@ -1,7 +1,8 @@
 import { prisma } from "../lib/prisma.js";
 import { logger } from "../lib/logger.js";
 import { createAdapterForShop } from "../adapters/registry.js";
-import { getActiveSets, matchListingsToSets } from "../matcher/setMatcher.js";
+import { getSetsForShop, matchListingsToSets } from "../matcher/setMatcher.js";
+import { familyOf } from "../scheduler/adapterFamily.js";
 import { detectAndPersist } from "../detector/eventDetector.js";
 import { notifyAll } from "../notify/sink.js";
 
@@ -44,9 +45,14 @@ export async function runShop(shopId: string): Promise<RunShopResult> {
     return emptyResult(shopId);
   }
 
-  const activeSets = await getActiveSets();
+  const activeSets = await getSetsForShop(shop);
   if (activeSets.length === 0) {
-    log.warn("no active sets — nothing to search for");
+    log.warn(
+      { family: familyOf(shop), setListId: shop.setListId },
+      "shop has no resolvable set list — skipping (assign a list or set a family default)",
+    );
+    // Bump lastSuccessfulRun so the heartbeat doesn't flag this shop as "stale" —
+    // the skip is intentional, not a failure.
     await prisma.shop.update({
       where: { id: shopId },
       data: { lastSuccessfulRun: new Date() },
@@ -69,7 +75,7 @@ export async function runShop(shopId: string): Promise<RunShopResult> {
   // ntfy hiccup doesn't fail the whole BullMQ job (which would skip the
   // next scheduled tick) — we'd rather log and let the repeatable retry.
   try {
-    const matches = await matchListingsToSets(listings);
+    const matches = await matchListingsToSets(listings, activeSets);
     const events = await detectAndPersist(shopId, matches);
     await notifyAll(events);
 
