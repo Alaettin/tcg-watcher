@@ -44,6 +44,7 @@ export function SettingsPage() {
       <h1 className="text-xl font-semibold">Settings</h1>
       <NtfySection />
       <NegativesSection />
+      <ProspekteSection />
     </div>
   );
 }
@@ -408,6 +409,147 @@ function NegativesSection() {
         >
           <RotateCcw size={14} /> {resetToDefaults.isPending ? "Setze zurück…" : "Auf Standard zurücksetzen"}
         </button>
+      </div>
+    </section>
+  );
+}
+
+interface ProspekteConfigResponse {
+  prospekteEnabled?: boolean;
+  prospektePostalCodes?: string[];
+  prospekteSearchQueries?: string[];
+  prospekteNegativeTerms?: string[];
+}
+
+function ProspekteSection() {
+  const qc = useQueryClient();
+  const settings = useQuery({
+    queryKey: ["settings"],
+    queryFn: () => api.get<ProspekteConfigResponse & SettingsResponse>("/api/settings"),
+  });
+
+  const [enabled, setEnabled] = useState<boolean>(true);
+  const [postalCodes, setPostalCodes] = useState<string>("");
+  const [queries, setQueries] = useState<string>("pokemon");
+  const [negs, setNegs] = useState<string>("");
+  const [dirty, setDirty] = useState(false);
+  const [triggerState, setTriggerState] = useState<"idle" | "running" | "ok" | "fail">("idle");
+
+  useEffect(() => {
+    if (!settings.data) return;
+    setEnabled(settings.data.prospekteEnabled ?? true);
+    setPostalCodes((settings.data.prospektePostalCodes ?? []).join(", "));
+    setQueries((settings.data.prospekteSearchQueries ?? ["pokemon"]).join("\n"));
+    setNegs((settings.data.prospekteNegativeTerms ?? []).join("\n"));
+    setDirty(false);
+  }, [settings.data]);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const plzList = postalCodes.split(/[,\s]+/).map((s) => s.trim()).filter((s) => /^\d{5}$/.test(s));
+      const queryList = queries.split("\n").map((s) => s.trim()).filter((s) => s.length > 0);
+      const negList = negs.split("\n").map((s) => s.trim()).filter((s) => s.length > 0);
+      await api.put("/api/settings/prospekteEnabled", { value: enabled });
+      await api.put("/api/settings/prospektePostalCodes", { value: plzList });
+      await api.put("/api/settings/prospekteSearchQueries", { value: queryList.length > 0 ? queryList : ["pokemon"] });
+      await api.put("/api/settings/prospekteNegativeTerms", { value: negList });
+    },
+    onSuccess: () => {
+      setDirty(false);
+      qc.invalidateQueries({ queryKey: ["settings"] });
+    },
+  });
+
+  const trigger = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; jobId: string }>("/api/admin/prospekte/trigger"),
+    onMutate: () => setTriggerState("running"),
+    onSuccess: () => setTriggerState("ok"),
+    onError: () => setTriggerState("fail"),
+  });
+
+  return (
+    <section className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+      <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
+        <div>
+          <h2 className="font-semibold">Prospekte (marktguru)</h2>
+          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-xl">
+            Täglicher Poll (07:00 MESZ) gegen marktguru's API. Alle Pokemon-Treffer aus deutschen Prospekten (REWE, Kaufland, Lidl, Müller, MediaMarkt, …) werden gepusht. Kein Set-Filter — auch Plüsch/Bekleidung kommt rein. Topic-Match basiert auf "pokemon" im Titel/Brand/Kategorie.
+          </p>
+        </div>
+        <button
+          onClick={() => trigger.mutate()}
+          disabled={trigger.isPending}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-slate-100 dark:bg-slate-800 text-sm disabled:opacity-50"
+          title="Sofort-Poll auslösen (statt auf 07:00 zu warten)"
+        >
+          <RefreshCw size={13} className={trigger.isPending ? "animate-spin" : ""} />
+          Jetzt aktualisieren
+        </button>
+      </div>
+
+      {triggerState === "ok" && (
+        <div className="mb-2 text-xs text-emerald-700 dark:text-emerald-400">
+          ✓ Poll gestartet — neue Deals tauchen im /prospekte-Tab in ~30s auf.
+        </div>
+      )}
+
+      <label className="flex items-center gap-2 mt-3">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => { setEnabled(e.target.checked); setDirty(true); }}
+          className="h-4 w-4"
+        />
+        <span className="text-sm font-medium">Aktiviert</span>
+      </label>
+
+      <label className="block mt-3">
+        <span className="text-xs font-medium text-slate-700 dark:text-slate-300">PLZ (komma-getrennt)</span>
+        <input
+          value={postalCodes}
+          onChange={(e) => { setPostalCodes(e.target.value); setDirty(true); }}
+          placeholder="z.B. 60311, 10115"
+          className="mt-0.5 w-full text-sm px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
+        />
+        <p className="text-[11px] text-slate-500 mt-1">
+          Leer = Berlin Mitte (DE-weit-Default, marktguru's API braucht IMMER eine PLZ — die public-Standard-Antworten sind aber bundesweit). Mehrere PLZ = pro PLZ wird separat gesucht.
+        </p>
+      </label>
+
+      <label className="block mt-3">
+        <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Such-Begriffe (eine pro Zeile)</span>
+        <textarea
+          value={queries}
+          onChange={(e) => { setQueries(e.target.value); setDirty(true); }}
+          rows={3}
+          className="mt-0.5 w-full font-mono text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
+          placeholder="pokemon"
+        />
+      </label>
+
+      <label className="block mt-3">
+        <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Negative-Terms (eine pro Zeile)</span>
+        <textarea
+          value={negs}
+          onChange={(e) => { setNegs(e.target.value); setDirty(true); }}
+          rows={4}
+          className="mt-0.5 w-full font-mono text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
+          placeholder={"Kalender\nHörspiel\nRoman"}
+        />
+        <p className="text-[11px] text-slate-500 mt-1">Default: Kalender, Hörspiel, Roman, eBook, Day-To-Day. Plüsch/Bekleidung sind bewusst NICHT drin.</p>
+      </label>
+
+      <div className="flex items-center gap-2 mt-3">
+        <button
+          onClick={() => save.mutate()}
+          disabled={!dirty || save.isPending}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-blue-600 text-white text-sm disabled:opacity-50"
+        >
+          <Save size={14} /> {save.isPending ? "Speichere…" : "Speichern"}
+        </button>
+        {save.isSuccess && !dirty && (
+          <span className="text-xs text-emerald-700 dark:text-emerald-400">Gespeichert.</span>
+        )}
       </div>
     </section>
   );

@@ -110,6 +110,37 @@ export interface SetListDetail extends SetList {
   updatedAt: string;
 }
 
+export interface OfflineDeal {
+  id: string;
+  source: string;
+  sourceDealId: string;
+  retailerId: string;
+  retailerName: string;
+  title: string;
+  description: string | null;
+  brand: string | null;
+  imageUrl: string | null;
+  category: string | null;
+  priceEur: number | null;
+  originalPriceEur: number | null;
+  validFrom: string;
+  validUntil: string;
+  sourceUrl: string | null;
+  postalCode: string | null;
+  storeName: string | null;
+  storeAddress: string | null;
+  storeCity: string | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export interface OfflineRetailer {
+  id: string;
+  displayName: string;
+  logoUrl: string | null;
+  activeDealsCount: number;
+}
+
 export interface SetPreset {
   id: string;
   name: string;

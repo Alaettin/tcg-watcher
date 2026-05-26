@@ -159,3 +159,63 @@ model Setting {
   value     String
   updatedAt DateTime @updatedAt
 }
+
+// Offline / brick-and-mortar deal tracking (marktguru, bonial, …).
+// Strictly separated from the Online listing models above.
+model OfflineRetailer {
+  id          String        @id          // "rewe", "kaufland", "lidl", "mediamarkt"
+  displayName String                       // "REWE", "Kaufland", "Lidl"
+  source      String?                      // optional: marktguru advertiser-id, e.g. "retailers/126654"
+  logoUrl     String?
+  deals       OfflineDeal[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model OfflineDeal {
+  id               String           @id @default(cuid())
+  source           String                            // "marktguru" | "bonial"
+  sourceDealId     String                            // ID von der Quelle (zur Dedup)
+  retailerId       String
+  retailer         OfflineRetailer  @relation(fields: [retailerId], references: [id])
+  title            String
+  description      String?
+  brand            String?
+  imageUrl         String?
+  category         String?
+  priceEur         Float?
+  originalPriceEur Float?
+  validFrom        DateTime
+  validUntil       DateTime
+  sourceUrl        String?
+
+  // optional Standort-Daten
+  postalCode       String?
+  storeName        String?
+  storeAddress     String?
+  storeCity        String?
+  storeLat         Float?
+  storeLng         Float?
+
+  firstSeenAt      DateTime         @default(now())
+  lastSeenAt       DateTime
+  events           OfflineEvent[]
+
+  @@unique([source, sourceDealId])
+  @@index([retailerId])
+  @@index([validUntil])
+  @@index([firstSeenAt])
+}
+
+model OfflineEvent {
+  id         String      @id @default(cuid())
+  dealId     String
+  deal       OfflineDeal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  type       String                          // NEW_DEAL | PRICE_DROP | EXPIRING_SOON | WENT_AWAY
+  detail     Json
+  notifiedAt DateTime?
+  createdAt  DateTime    @default(now())
+
+  @@index([type, createdAt])
+  @@index([dealId])
+}

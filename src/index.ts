@@ -13,7 +13,9 @@ import { seedProducts } from "./seed/products.js";
 import { seedSettings } from "./seed/settings.js";
 import { seedSetPresets } from "./seed/sets.js";
 import { seedSetLists } from "./seed/setLists.js";
+import { seedOfflineRetailers } from "./seed/offlineRetailers.js";
 import { startScheduler } from "./scheduler/queue.js";
+import { startOfflineScheduler } from "./offline/scheduler.js";
 import { runShop } from "./worker/runShop.js";
 import { closeBrowser } from "./adapters/playwright-browser.js";
 import { startWebServer } from "./web/server.js";
@@ -25,6 +27,7 @@ async function main() {
   await seedSettings();
   await seedSetPresets();
   await seedSetLists();
+  await seedOfflineRetailers();
   const products = await seedProducts();
   logger.info({ products: products.length }, "watchlist ready");
 
@@ -44,6 +47,8 @@ async function main() {
   const { stop: stopScheduler } = await startScheduler();
   logger.info("scheduler started");
 
+  const { stop: stopOfflineScheduler } = await startOfflineScheduler();
+
   const { stop: stopWeb } = await startWebServer();
 
   let shuttingDown = false;
@@ -53,6 +58,7 @@ async function main() {
     logger.info({ signal }, "shutdown initiated");
     await stopWeb();
     await stopScheduler();
+    await stopOfflineScheduler();
     await prisma.$disconnect();
     process.exit(0);
   };

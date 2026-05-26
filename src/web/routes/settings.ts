@@ -37,6 +37,10 @@ const VALIDATORS: Record<string, z.ZodTypeAny> = {
   [SETTING_KEYS.NTFY_CONFIG]: NtfyConfigSchema,
   [SETTING_KEYS.DEFAULT_FAST_SET_LIST_ID]: z.string().nullable(),
   [SETTING_KEYS.DEFAULT_SLOW_SET_LIST_ID]: z.string().nullable(),
+  [SETTING_KEYS.PROSPEKTE_ENABLED]: z.boolean(),
+  [SETTING_KEYS.PROSPEKTE_POSTAL_CODES]: z.array(z.string().regex(/^\d{5}$/, "5-digit PLZ")).max(20),
+  [SETTING_KEYS.PROSPEKTE_SEARCH_QUERIES]: z.array(z.string().min(1).max(60)).min(1).max(10),
+  [SETTING_KEYS.PROSPEKTE_NEGATIVE_TERMS]: z.array(z.string().min(1).max(60)).max(50),
 };
 
 const SET_RESOLUTION_KEYS = new Set<string>([

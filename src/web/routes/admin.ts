@@ -9,6 +9,7 @@ import {
   resetAllQueues,
   triggerShopNow,
 } from "../../scheduler/queue.js";
+import { triggerProspekteNow } from "../../offline/scheduler.js";
 import { sendDailyHeartbeat } from "../../notify/heartbeat.js";
 import { closeBrowser } from "../../adapters/playwright-browser.js";
 import { invalidateSetsForShopCache } from "../../matcher/setMatcher.js";
@@ -90,6 +91,16 @@ adminRouter.post("/admin/restart-browser", async (_req, res, next) => {
     await closeBrowser();
     logger.info("playwright browser restarted via api");
     res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.post("/admin/prospekte/trigger", async (_req, res, next) => {
+  try {
+    const jobId = await triggerProspekteNow();
+    logger.info({ jobId }, "offline prospekte poll triggered via api");
+    res.json({ ok: true, jobId });
   } catch (err) {
     next(err);
   }

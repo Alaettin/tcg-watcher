@@ -5,6 +5,11 @@ export const SETTING_KEYS = {
   NTFY_CONFIG: "ntfyConfig",
   DEFAULT_FAST_SET_LIST_ID: "defaultFastSetListId",
   DEFAULT_SLOW_SET_LIST_ID: "defaultSlowSetListId",
+  // Offline / Prospekt-Tracker (marktguru et al.) — separate sub-system
+  PROSPEKTE_ENABLED: "prospekteEnabled",
+  PROSPEKTE_POSTAL_CODES: "prospektePostalCodes",
+  PROSPEKTE_SEARCH_QUERIES: "prospekteSearchQueries",
+  PROSPEKTE_NEGATIVE_TERMS: "prospekteNegativeTerms",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
@@ -41,6 +46,32 @@ export async function getFamilyDefaults(): Promise<FamilyDefaults> {
     getSetting<string | null>(SETTING_KEYS.DEFAULT_SLOW_SET_LIST_ID, null),
   ]);
   return { fast, slow };
+}
+
+export interface ProspekteConfig {
+  enabled: boolean;
+  postalCodes: string[];           // [] = deutschlandweit (kann sein dass API dann nichts liefert; UI hinweist)
+  searchQueries: string[];         // default ["pokemon"]
+  negativeTerms: string[];         // default kurz: Bücher/Hörspiele
+}
+
+export const DEFAULT_PROSPEKTE_NEGATIVES = [
+  "Kalender",
+  "Hörspiel",
+  "Roman",
+  "eBook",
+  "Day-To-Day",
+  "Day to Day",
+];
+
+export async function getProspekteConfig(): Promise<ProspekteConfig> {
+  const [enabled, postalCodes, searchQueries, negativeTerms] = await Promise.all([
+    getSetting<boolean>(SETTING_KEYS.PROSPEKTE_ENABLED, true),
+    getSetting<string[]>(SETTING_KEYS.PROSPEKTE_POSTAL_CODES, []),
+    getSetting<string[]>(SETTING_KEYS.PROSPEKTE_SEARCH_QUERIES, ["pokemon"]),
+    getSetting<string[]>(SETTING_KEYS.PROSPEKTE_NEGATIVE_TERMS, DEFAULT_PROSPEKTE_NEGATIVES),
+  ]);
+  return { enabled, postalCodes, searchQueries, negativeTerms };
 }
 
 const CACHE_TTL_MS = 60_000;
