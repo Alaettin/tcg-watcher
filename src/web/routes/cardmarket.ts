@@ -44,8 +44,6 @@ cardmarketRouter.get("/cardmarket/products", async (req, res, next) => {
     } else if (sort === "updatedAt") {
       orderBy = { updatedAt: order };
     } else {
-      // trend/low/avg live on the related CardmarketPrice — Prisma supports
-      // ordering by 1-1 relation field directly.
       orderBy = { price: { [sort]: order } };
     }
 
@@ -108,17 +106,21 @@ cardmarketRouter.get("/cardmarket/categories", async (_req, res, next) => {
 
 cardmarketRouter.get("/cardmarket/expansions", async (_req, res, next) => {
   try {
-    const rows = await prisma.cardmarketProduct.groupBy({
-      by: ["idExpansion"],
-      _count: { idProduct: true },
-      orderBy: { _count: { idProduct: "desc" } },
-    });
-    res.json(
-      rows.map((r) => ({
-        idExpansion: r.idExpansion,
-        productCount: r._count.idProduct,
-      })),
-    );
+    // Join mit CardmarketExpansion-Namen, fallback auf "Set {id}" wenn fehlend.
+    const rows = await prisma.$queryRaw<
+      { idExpansion: number; productCount: number; name: string | null; language: string | null }[]
+    >`
+      SELECT
+        p."idExpansion",
+        COUNT(*)::int AS "productCount",
+        e."name",
+        e."language"
+      FROM "CardmarketProduct" p
+      LEFT JOIN "CardmarketExpansion" e ON e."idExpansion" = p."idExpansion"
+      GROUP BY p."idExpansion", e."name", e."language"
+      ORDER BY COUNT(*) DESC
+    `;
+    res.json(rows);
   } catch (err) {
     next(err);
   }
@@ -135,6 +137,595 @@ cardmarketRouter.get("/cardmarket/sync-status", async (_req, res, next) => {
   }
 });
 
+// ============================================================================
+// Phase 1 + 2 — Signal-Endpoints (cm.md)
+// ============================================================================
+
+/** Aktuelles snapshotDate aus CardmarketSignal — Cache am Request-Start. */
+async function getLatestSignalDate(): Promise<Date | null> {
+  const row = await prisma.cardmarketSignal.findFirst({
+    select: { snapshotDate: true },
+    orderBy: { snapshotDate: "desc" },
+  });
+  return row?.snapshotDate ?? null;
+}
+
+const SignalsTodayQuery = z.object({
+  recommendation: z.enum(["GREEN", "AMBER", "RED", "NEUTRAL"]).optional(),
+  category: z.coerce.number().int().optional(),
+  expansion: z.coerce.number().int().optional(),
+  q: z.string().trim().min(1).max(120).optional(),
+  minQuality: z.coerce.number().min(0).max(1).optional(),
+  sort: z.enum(["delta7", "delta30", "lScore", "mScore", "trend", "name"]).default("delta7"),
+  order: z.enum(["asc", "desc"]).default("desc"),
+  offset: z.coerce.number().int().min(0).default(0),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+
+cardmarketRouter.get("/cardmarket/signals/today", async (req, res, next) => {
+  try {
+    const parsed = SignalsTodayQuery.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid query", issues: parsed.error.issues });
+      return;
+    }
+    const { recommendation, category, expansion, q, minQuality, sort, order, offset, limit } =
+      parsed.data;
+
+    const latest = await getLatestSignalDate();
+    if (!latest) {
+      res.json({ results: [], total: 0, snapshotDate: null, offset, limit });
+      return;
+    }
+
+    const sortMap: Record<typeof sort, Prisma.Sql> = {
+      delta7: Prisma.sql`s."delta7"`,
+      delta30: Prisma.sql`s."delta30"`,
+      lScore: Prisma.sql`s."lScore"`,
+      mScore: Prisma.sql`s."mScore"`,
+      trend: Prisma.sql`pr."trend"`,
+      name: Prisma.sql`p."name"`,
+    };
+    const orderSql = order === "asc" ? Prisma.sql`ASC NULLS LAST` : Prisma.sql`DESC NULLS LAST`;
+
+    const filters: Prisma.Sql[] = [Prisma.sql`s."snapshotDate" = ${latest}::date`];
+    if (recommendation) filters.push(Prisma.sql`s."recommendation" = ${recommendation}`);
+    if (category) filters.push(Prisma.sql`p."idCategory" = ${category}`);
+    if (expansion) filters.push(Prisma.sql`p."idExpansion" = ${expansion}`);
+    if (q) filters.push(Prisma.sql`p."name" ILIKE ${`%${q}%`}`);
+    if (minQuality != null) filters.push(Prisma.sql`s."sampleQuality" >= ${minQuality}`);
+    const whereSql = Prisma.join(filters, " AND ");
+
+    const [totalRow, results] = await Promise.all([
+      prisma.$queryRaw<{ c: bigint }[]>`
+        SELECT COUNT(*)::bigint AS c
+        FROM "CardmarketSignal" s
+        JOIN "CardmarketProduct" p ON p."idProduct" = s."idProduct"
+        LEFT JOIN "CardmarketPrice" pr ON pr."idProduct" = s."idProduct"
+        WHERE ${whereSql}
+      `,
+      prisma.$queryRaw<SignalRow[]>`
+        SELECT s."idProduct", s."snapshotDate", s."lScore", s."mScore", s."delta7", s."delta30",
+               s."movementClass", s."recommendation", s."headline", s."reasoningLines",
+               s."sampleQuality",
+               p."name", p."idCategory", p."categoryName", p."idExpansion",
+               pr."trend", pr."low", pr."avg"
+        FROM "CardmarketSignal" s
+        JOIN "CardmarketProduct" p ON p."idProduct" = s."idProduct"
+        LEFT JOIN "CardmarketPrice" pr ON pr."idProduct" = s."idProduct"
+        WHERE ${whereSql}
+        ORDER BY ${sortMap[sort]} ${orderSql}
+        LIMIT ${limit} OFFSET ${offset}
+      `,
+    ]);
+
+    const total = Number(totalRow[0]?.c ?? 0n);
+    res.json({
+      results: results.map(serializeSignalRow),
+      total,
+      snapshotDate: latest.toISOString().slice(0, 10),
+      offset,
+      limit,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+interface SignalRow {
+  idProduct: number;
+  snapshotDate: Date;
+  lScore: number | null;
+  mScore: number | null;
+  delta7: number | null;
+  delta30: number | null;
+  movementClass: string | null;
+  recommendation: string;
+  headline: string;
+  reasoningLines: string[];
+  sampleQuality: number;
+  name: string;
+  idCategory: number;
+  categoryName: string;
+  idExpansion: number;
+  trend: number | null;
+  low: number | null;
+  avg: number | null;
+}
+
+function serializeSignalRow(row: SignalRow) {
+  return {
+    idProduct: row.idProduct,
+    snapshotDate: row.snapshotDate.toISOString().slice(0, 10),
+    lScore: row.lScore,
+    mScore: row.mScore,
+    delta7: row.delta7,
+    delta30: row.delta30,
+    movementClass: row.movementClass,
+    recommendation: row.recommendation,
+    headline: row.headline,
+    reasoningLines: row.reasoningLines,
+    sampleQuality: row.sampleQuality,
+    product: {
+      idProduct: row.idProduct,
+      name: row.name,
+      idCategory: row.idCategory,
+      categoryName: row.categoryName,
+      idExpansion: row.idExpansion,
+    },
+    price: {
+      trend: row.trend,
+      low: row.low,
+      avg: row.avg,
+    },
+  };
+}
+
+// ----------------------------------------------------------------------------
+// Movers — vorsortierte Listen für den Movers-Screen (cm.md §7.3)
+// ----------------------------------------------------------------------------
+const MoversQuery = z.object({
+  tab: z.enum(["risers", "fallers", "deals", "volatile"]).default("risers"),
+  category: z.coerce.number().int().optional(),
+  expansion: z.coerce.number().int().optional(),
+  minQuality: z.coerce.number().min(0).max(1).default(0.5),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+cardmarketRouter.get("/cardmarket/movers", async (req, res, next) => {
+  try {
+    const parsed = MoversQuery.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid query", issues: parsed.error.issues });
+      return;
+    }
+    const { tab, category, expansion, minQuality, limit, offset } = parsed.data;
+    const latest = await getLatestSignalDate();
+    if (!latest) {
+      res.json({ results: [], total: 0, snapshotDate: null, offset, limit, tab });
+      return;
+    }
+
+    const baseFilters: Prisma.Sql[] = [
+      Prisma.sql`s."snapshotDate" = ${latest}::date`,
+      Prisma.sql`s."sampleQuality" >= ${minQuality}`,
+    ];
+    if (category) baseFilters.push(Prisma.sql`p."idCategory" = ${category}`);
+    if (expansion) baseFilters.push(Prisma.sql`p."idExpansion" = ${expansion}`);
+
+    let tabFilter: Prisma.Sql;
+    let orderBy: Prisma.Sql;
+    switch (tab) {
+      case "risers":
+        tabFilter = Prisma.sql`s."delta7" IS NOT NULL`;
+        orderBy = Prisma.sql`s."delta7" DESC NULLS LAST`;
+        break;
+      case "fallers":
+        tabFilter = Prisma.sql`s."delta7" IS NOT NULL`;
+        orderBy = Prisma.sql`s."delta7" ASC NULLS LAST`;
+        break;
+      case "deals":
+        // M zwischen OPPORTUNITY_MIN(0.15) und SUSPICIOUS(0.60) — echte Gelegenheiten ohne Outlier.
+        tabFilter = Prisma.sql`s."mScore" IS NOT NULL AND s."mScore" > 0.15 AND s."mScore" <= 0.60`;
+        orderBy = Prisma.sql`s."mScore" DESC NULLS LAST`;
+        break;
+      case "volatile":
+        // Volatil = große absolute Bewegung. ABS(Δ7) als Treiber, mit Tie-Break ABS(Δ30).
+        tabFilter = Prisma.sql`s."delta7" IS NOT NULL`;
+        orderBy = Prisma.sql`ABS(s."delta7") DESC, ABS(COALESCE(s."delta30", 0)) DESC`;
+        break;
+    }
+    const allFilters = Prisma.join([...baseFilters, tabFilter], " AND ");
+
+    const [totalRow, results] = await Promise.all([
+      prisma.$queryRaw<{ c: bigint }[]>`
+        SELECT COUNT(*)::bigint AS c
+        FROM "CardmarketSignal" s
+        JOIN "CardmarketProduct" p ON p."idProduct" = s."idProduct"
+        WHERE ${allFilters}
+      `,
+      prisma.$queryRaw<SignalRow[]>`
+        SELECT s."idProduct", s."snapshotDate", s."lScore", s."mScore", s."delta7", s."delta30",
+               s."movementClass", s."recommendation", s."headline", s."reasoningLines",
+               s."sampleQuality",
+               p."name", p."idCategory", p."categoryName", p."idExpansion",
+               pr."trend", pr."low", pr."avg"
+        FROM "CardmarketSignal" s
+        JOIN "CardmarketProduct" p ON p."idProduct" = s."idProduct"
+        LEFT JOIN "CardmarketPrice" pr ON pr."idProduct" = s."idProduct"
+        WHERE ${allFilters}
+        ORDER BY ${orderBy}
+        LIMIT ${limit} OFFSET ${offset}
+      `,
+    ]);
+
+    res.json({
+      results: results.map(serializeSignalRow),
+      total: Number(totalRow[0]?.c ?? 0n),
+      snapshotDate: latest.toISOString().slice(0, 10),
+      offset,
+      limit,
+      tab,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ----------------------------------------------------------------------------
+// Produkt-Detail: Signal + Snapshot-Historie
+// ----------------------------------------------------------------------------
+cardmarketRouter.get("/cardmarket/products/:idProduct/signal", async (req, res, next) => {
+  try {
+    const id = Number(req.params.idProduct);
+    if (!Number.isInteger(id)) {
+      res.status(400).json({ error: "idProduct must be an integer" });
+      return;
+    }
+    const [product, signal, expansion] = await Promise.all([
+      prisma.cardmarketProduct.findUnique({
+        where: { idProduct: id },
+        include: { price: true },
+      }),
+      prisma.cardmarketSignal.findFirst({
+        where: { idProduct: id },
+        orderBy: { snapshotDate: "desc" },
+      }),
+      // Set-Kontext aus MV
+      prisma.$queryRaw<
+        {
+          idExpansion: number;
+          productCount: number;
+          medianL: number | null;
+          medianDelta7: number | null;
+          volatilityDelta7: number | null;
+          name: string | null;
+          language: string | null;
+        }[]
+      >`
+        SELECT
+          mv."idExpansion",
+          mv."productCount",
+          mv."medianL",
+          mv."medianDelta7",
+          mv."volatilityDelta7",
+          e."name",
+          e."language"
+        FROM "CardmarketSetSignalDaily" mv
+        LEFT JOIN "CardmarketExpansion" e ON e."idExpansion" = mv."idExpansion"
+        WHERE mv."idExpansion" = (
+          SELECT "idExpansion" FROM "CardmarketProduct" WHERE "idProduct" = ${id}
+        )
+        ORDER BY mv."snapshotDate" DESC
+        LIMIT 1
+      `,
+    ]);
+
+    if (!product) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+
+    res.json({
+      product,
+      signal: signal
+        ? {
+            ...signal,
+            snapshotDate: signal.snapshotDate.toISOString().slice(0, 10),
+          }
+        : null,
+      setContext: expansion[0] ?? null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const HistoryQuery = z.object({
+  range: z.enum(["7d", "30d", "90d", "all"]).default("30d"),
+});
+
+cardmarketRouter.get("/cardmarket/products/:idProduct/history", async (req, res, next) => {
+  try {
+    const id = Number(req.params.idProduct);
+    if (!Number.isInteger(id)) {
+      res.status(400).json({ error: "idProduct must be an integer" });
+      return;
+    }
+    const parsed = HistoryQuery.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid query", issues: parsed.error.issues });
+      return;
+    }
+    const { range } = parsed.data;
+
+    let dateFilter: Prisma.Sql;
+    if (range === "all") {
+      dateFilter = Prisma.sql`TRUE`;
+    } else {
+      const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
+      dateFilter = Prisma.sql`"snapshotDate" >= CURRENT_DATE - (${days}::int * INTERVAL '1 day')`;
+    }
+
+    const rows = await prisma.$queryRaw<
+      {
+        snapshotDate: Date;
+        low: number | null;
+        avg: number | null;
+        trend: number | null;
+      }[]
+    >`
+      SELECT "snapshotDate", "low", "avg", "trend"
+      FROM "CardmarketPriceSnapshot"
+      WHERE "idProduct" = ${id} AND ${dateFilter}
+      ORDER BY "snapshotDate" ASC
+    `;
+
+    res.json({
+      range,
+      points: rows.map((r) => ({
+        date: r.snapshotDate.toISOString().slice(0, 10),
+        low: r.low,
+        avg: r.avg,
+        trend: r.trend,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ----------------------------------------------------------------------------
+// Set-Signal
+// ----------------------------------------------------------------------------
+cardmarketRouter.get("/cardmarket/sets/:idExpansion/signal", async (req, res, next) => {
+  try {
+    const id = Number(req.params.idExpansion);
+    if (!Number.isInteger(id)) {
+      res.status(400).json({ error: "idExpansion must be an integer" });
+      return;
+    }
+    const [setRow, products] = await Promise.all([
+      prisma.$queryRaw<
+        {
+          idExpansion: number;
+          productCount: number;
+          medianL: number | null;
+          medianDelta7: number | null;
+          volatilityDelta7: number | null;
+          name: string | null;
+          language: string | null;
+        }[]
+      >`
+        SELECT
+          mv."idExpansion",
+          mv."productCount",
+          mv."medianL",
+          mv."medianDelta7",
+          mv."volatilityDelta7",
+          e."name",
+          e."language"
+        FROM "CardmarketSetSignalDaily" mv
+        LEFT JOIN "CardmarketExpansion" e ON e."idExpansion" = mv."idExpansion"
+        WHERE mv."idExpansion" = ${id}
+        ORDER BY mv."snapshotDate" DESC
+        LIMIT 1
+      `,
+      prisma.$queryRaw<SignalRow[]>`
+        SELECT s."idProduct", s."snapshotDate", s."lScore", s."mScore", s."delta7", s."delta30",
+               s."movementClass", s."recommendation", s."headline", s."reasoningLines",
+               s."sampleQuality",
+               p."name", p."idCategory", p."categoryName", p."idExpansion",
+               pr."trend", pr."low", pr."avg"
+        FROM "CardmarketSignal" s
+        JOIN "CardmarketProduct" p ON p."idProduct" = s."idProduct"
+        LEFT JOIN "CardmarketPrice" pr ON pr."idProduct" = s."idProduct"
+        WHERE p."idExpansion" = ${id}
+          AND s."snapshotDate" = (SELECT MAX("snapshotDate") FROM "CardmarketSignal")
+        ORDER BY s."delta7" DESC NULLS LAST
+      `,
+    ]);
+
+    res.json({
+      set: setRow[0] ?? null,
+      products: products.map(serializeSignalRow),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ----------------------------------------------------------------------------
+// Dashboard — Marktstimmung + Tageshighlights (cm.md §7.2)
+// ----------------------------------------------------------------------------
+cardmarketRouter.get("/cardmarket/dashboard", async (_req, res, next) => {
+  try {
+    const latest = await getLatestSignalDate();
+    if (!latest) {
+      res.json({
+        snapshotDate: null,
+        breadthIndex: null,
+        breadthIndex7dAgo: null,
+        breadthIndexSparkline: [],
+        highlights: { topRiser: null, topFaller: null, biggestDeal: null },
+        topGreen: [],
+        lastSyncLog: null,
+      });
+      return;
+    }
+
+    // Breitenindex = % aller Produkte mit Δ7 > 0.
+    const breadthRow = await prisma.$queryRaw<{ pct: number | null }[]>`
+      SELECT
+        ROUND(100.0 * SUM(CASE WHEN "delta7" > 0 THEN 1 ELSE 0 END)::numeric
+              / NULLIF(COUNT(*) FILTER (WHERE "delta7" IS NOT NULL), 0), 1) AS pct
+      FROM "CardmarketSignal"
+      WHERE "snapshotDate" = ${latest}::date
+    `;
+    const breadthIndex = breadthRow[0]?.pct == null ? null : Number(breadthRow[0].pct);
+
+    // 7d-Vergleich + 30-Tage-Sparkline.
+    const sparkline = await prisma.$queryRaw<{ snapshotDate: Date; pct: number | null }[]>`
+      SELECT
+        "snapshotDate",
+        ROUND(100.0 * SUM(CASE WHEN "delta7" > 0 THEN 1 ELSE 0 END)::numeric
+              / NULLIF(COUNT(*) FILTER (WHERE "delta7" IS NOT NULL), 0), 1) AS pct
+      FROM "CardmarketSignal"
+      WHERE "snapshotDate" >= CURRENT_DATE - INTERVAL '30 days'
+      GROUP BY "snapshotDate"
+      ORDER BY "snapshotDate" ASC
+    `;
+    const sparkPoints = sparkline.map((r) => ({
+      date: r.snapshotDate.toISOString().slice(0, 10),
+      breadthIndex: r.pct == null ? null : Number(r.pct),
+    }));
+    const sevenDayRow = sparkPoints.find(
+      (p) =>
+        p.date ===
+        new Date(latest.getTime() - 7 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+    );
+    const breadthIndex7dAgo = sevenDayRow?.breadthIndex ?? null;
+
+    // Highlights: Top-Riser, Top-Faller, größter Listing-Deal — alle mit Quality >= 0.5
+    const [topRiserRows, topFallerRows, biggestDealRows] = await Promise.all([
+      prisma.$queryRaw<SignalRow[]>`
+        SELECT s."idProduct", s."snapshotDate", s."lScore", s."mScore", s."delta7", s."delta30",
+               s."movementClass", s."recommendation", s."headline", s."reasoningLines",
+               s."sampleQuality",
+               p."name", p."idCategory", p."categoryName", p."idExpansion",
+               pr."trend", pr."low", pr."avg"
+        FROM "CardmarketSignal" s
+        JOIN "CardmarketProduct" p ON p."idProduct" = s."idProduct"
+        LEFT JOIN "CardmarketPrice" pr ON pr."idProduct" = s."idProduct"
+        WHERE s."snapshotDate" = ${latest}::date
+          AND s."sampleQuality" >= 0.5
+          AND s."delta7" IS NOT NULL
+        ORDER BY s."delta7" DESC
+        LIMIT 1
+      `,
+      prisma.$queryRaw<SignalRow[]>`
+        SELECT s."idProduct", s."snapshotDate", s."lScore", s."mScore", s."delta7", s."delta30",
+               s."movementClass", s."recommendation", s."headline", s."reasoningLines",
+               s."sampleQuality",
+               p."name", p."idCategory", p."categoryName", p."idExpansion",
+               pr."trend", pr."low", pr."avg"
+        FROM "CardmarketSignal" s
+        JOIN "CardmarketProduct" p ON p."idProduct" = s."idProduct"
+        LEFT JOIN "CardmarketPrice" pr ON pr."idProduct" = s."idProduct"
+        WHERE s."snapshotDate" = ${latest}::date
+          AND s."sampleQuality" >= 0.5
+          AND s."delta7" IS NOT NULL
+        ORDER BY s."delta7" ASC
+        LIMIT 1
+      `,
+      prisma.$queryRaw<SignalRow[]>`
+        SELECT s."idProduct", s."snapshotDate", s."lScore", s."mScore", s."delta7", s."delta30",
+               s."movementClass", s."recommendation", s."headline", s."reasoningLines",
+               s."sampleQuality",
+               p."name", p."idCategory", p."categoryName", p."idExpansion",
+               pr."trend", pr."low", pr."avg"
+        FROM "CardmarketSignal" s
+        JOIN "CardmarketProduct" p ON p."idProduct" = s."idProduct"
+        LEFT JOIN "CardmarketPrice" pr ON pr."idProduct" = s."idProduct"
+        WHERE s."snapshotDate" = ${latest}::date
+          AND s."sampleQuality" >= 0.5
+          AND s."mScore" IS NOT NULL
+          AND s."mScore" > 0.15
+          AND s."mScore" <= 0.60
+        ORDER BY s."mScore" DESC
+        LIMIT 1
+      `,
+    ]);
+
+    // Top-5 GREEN-Signale für Watchlist-Stub (Phase 1+2 ohne Watchlist).
+    const topGreen = await prisma.$queryRaw<SignalRow[]>`
+      SELECT s."idProduct", s."snapshotDate", s."lScore", s."mScore", s."delta7", s."delta30",
+             s."movementClass", s."recommendation", s."headline", s."reasoningLines",
+             s."sampleQuality",
+             p."name", p."idCategory", p."categoryName", p."idExpansion",
+             pr."trend", pr."low", pr."avg"
+      FROM "CardmarketSignal" s
+      JOIN "CardmarketProduct" p ON p."idProduct" = s."idProduct"
+      LEFT JOIN "CardmarketPrice" pr ON pr."idProduct" = s."idProduct"
+      WHERE s."snapshotDate" = ${latest}::date
+        AND s."recommendation" = 'GREEN'
+        AND s."sampleQuality" >= 0.5
+      ORDER BY s."sampleQuality" DESC, COALESCE(s."mScore", 0) DESC
+      LIMIT 5
+    `;
+
+    const lastLog = await prisma.cardmarketSyncLog.findFirst({
+      orderBy: { startedAt: "desc" },
+    });
+
+    res.json({
+      snapshotDate: latest.toISOString().slice(0, 10),
+      breadthIndex,
+      breadthIndex7dAgo,
+      breadthIndexSparkline: sparkPoints,
+      highlights: {
+        topRiser: topRiserRows[0] ? serializeSignalRow(topRiserRows[0]) : null,
+        topFaller: topFallerRows[0] ? serializeSignalRow(topFallerRows[0]) : null,
+        biggestDeal: biggestDealRows[0] ? serializeSignalRow(biggestDealRows[0]) : null,
+      },
+      topGreen: topGreen.map(serializeSignalRow),
+      lastSyncLog: lastLog ? serializeSyncLog(lastLog) : null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+function serializeSyncLog(log: {
+  id: bigint;
+  startedAt: Date;
+  finishedAt: Date | null;
+  productsCount: number | null;
+  snapshotsCount: number | null;
+  signalsCount: number | null;
+  expansionsCount: number | null;
+  status: string;
+  errorMsg: string | null;
+  durationMs: number | null;
+}) {
+  return {
+    id: String(log.id),
+    startedAt: log.startedAt.toISOString(),
+    finishedAt: log.finishedAt ? log.finishedAt.toISOString() : null,
+    productsCount: log.productsCount,
+    snapshotsCount: log.snapshotsCount,
+    signalsCount: log.signalsCount,
+    expansionsCount: log.expansionsCount,
+    status: log.status,
+    errorMsg: log.errorMsg,
+    durationMs: log.durationMs,
+  };
+}
+
+// ----------------------------------------------------------------------------
+// Admin-Endpoints
+// ----------------------------------------------------------------------------
 cardmarketRouter.post("/admin/cardmarket/sync", async (_req, res, next) => {
   try {
     const jobId = await triggerCardmarketSyncNow();
@@ -145,9 +736,32 @@ cardmarketRouter.post("/admin/cardmarket/sync", async (_req, res, next) => {
   }
 });
 
+cardmarketRouter.post("/admin/cardmarket/recompute-signals", async (_req, res, next) => {
+  try {
+    const jobId = await triggerCardmarketSyncNow({ signalsOnly: true });
+    logger.info({ jobId }, "cardmarket signals recompute triggered via api");
+    res.json({ ok: true, jobId });
+  } catch (err) {
+    next(err);
+  }
+});
+
+cardmarketRouter.get("/admin/cardmarket/sync-log", async (req, res, next) => {
+  try {
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit ?? 20)));
+    const logs = await prisma.cardmarketSyncLog.findMany({
+      orderBy: { startedAt: "desc" },
+      take: limit,
+    });
+    res.json(logs.map(serializeSyncLog));
+  } catch (err) {
+    next(err);
+  }
+});
+
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB — price_guide is ~14 MB, give headroom
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
 });
 
 cardmarketRouter.post(

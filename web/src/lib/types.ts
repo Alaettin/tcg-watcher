@@ -230,6 +230,135 @@ export interface CardmarketCategory {
 export interface CardmarketExpansion {
   idExpansion: number;
   productCount: number;
+  name: string | null;
+  language: string | null;
+}
+
+// ---- Phase 1 + 2 (cm.md) -----------------------------------------------------
+
+export type CmRecommendation = "GREEN" | "AMBER" | "RED" | "NEUTRAL";
+
+export type CmMovementClass =
+  | "accelerating"
+  | "stable_uptrend"
+  | "stagnating_peak"
+  | "correction_in_uptrend"
+  | "turning_up"
+  | "sideways"
+  | "turning_down"
+  | "bounce_in_downtrend"
+  | "bottoming"
+  | "stable_downtrend"
+  | "capitulation"
+  | "unknown";
+
+export interface CardmarketSignalSummary {
+  idProduct: number;
+  snapshotDate: string;
+  lScore: number | null;
+  mScore: number | null;
+  delta7: number | null;
+  delta30: number | null;
+  movementClass: CmMovementClass | null;
+  recommendation: CmRecommendation;
+  headline: string;
+  reasoningLines: string[];
+  sampleQuality: number;
+  product: {
+    idProduct: number;
+    name: string;
+    idCategory: number;
+    categoryName: string;
+    idExpansion: number;
+  };
+  price: {
+    trend: number | null;
+    low: number | null;
+    avg: number | null;
+  };
+}
+
+export interface CardmarketSignalDetail {
+  idProduct: number;
+  snapshotDate: string;
+  lScore: number | null;
+  mScore: number | null;
+  delta7: number | null;
+  delta30: number | null;
+  movementClass: CmMovementClass | null;
+  recommendation: CmRecommendation;
+  headline: string;
+  reasoningLines: string[];
+  sampleQuality: number;
+}
+
+export interface CardmarketSetContext {
+  idExpansion: number;
+  productCount: number;
+  medianL: number | null;
+  medianDelta7: number | null;
+  volatilityDelta7: number | null;
+  name: string | null;
+  language: string | null;
+}
+
+export interface CardmarketSignalListResponse {
+  results: CardmarketSignalSummary[];
+  total: number;
+  snapshotDate: string | null;
+  offset: number;
+  limit: number;
+  tab?: "risers" | "fallers" | "deals" | "volatile";
+}
+
+export interface CardmarketHistoryPoint {
+  date: string;
+  low: number | null;
+  avg: number | null;
+  trend: number | null;
+}
+
+export interface CardmarketHistoryResponse {
+  range: "7d" | "30d" | "90d" | "all";
+  points: CardmarketHistoryPoint[];
+}
+
+export interface CardmarketProductSignalResponse {
+  product: CardmarketProduct;
+  signal: CardmarketSignalDetail | null;
+  setContext: CardmarketSetContext | null;
+}
+
+export interface CardmarketSetSignalResponse {
+  set: CardmarketSetContext | null;
+  products: CardmarketSignalSummary[];
+}
+
+export interface CardmarketSyncLog {
+  id: string;
+  startedAt: string;
+  finishedAt: string | null;
+  productsCount: number | null;
+  snapshotsCount: number | null;
+  signalsCount: number | null;
+  expansionsCount: number | null;
+  status: "running" | "ok" | "failed";
+  errorMsg: string | null;
+  durationMs: number | null;
+}
+
+export interface CardmarketDashboardResponse {
+  snapshotDate: string | null;
+  breadthIndex: number | null;
+  breadthIndex7dAgo: number | null;
+  breadthIndexSparkline: Array<{ date: string; breadthIndex: number | null }>;
+  highlights: {
+    topRiser: CardmarketSignalSummary | null;
+    topFaller: CardmarketSignalSummary | null;
+    biggestDeal: CardmarketSignalSummary | null;
+  };
+  topGreen: CardmarketSignalSummary[];
+  lastSyncLog: CardmarketSyncLog | null;
 }
 
 export interface CardmarketProductList {

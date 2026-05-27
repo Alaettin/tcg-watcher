@@ -6,4 +6,23 @@
   html, body, #root {
     @apply h-full;
   }
+  /* Cardmarket Ampel-Farben (cm.md §7.7). Dark-Mode tauscht in @media unten. */
+  :root {
+    --cm-green: #1D9E75;
+    --cm-amber: #BA7517;
+    --cm-red: #A32D2D;
+    --cm-green-soft: #DCF1E7;
+    --cm-amber-soft: #FBEBD3;
+    --cm-red-soft: #F4D9D9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --cm-green: #5DCAA5;
+      --cm-amber: #EF9F27;
+      --cm-red: #E24B4A;
+      --cm-green-soft: rgba(93, 202, 165, 0.15);
+      --cm-amber-soft: rgba(239, 159, 39, 0.15);
+      --cm-red-soft: rgba(226, 75, 74, 0.15);
+    }
+  }
 }

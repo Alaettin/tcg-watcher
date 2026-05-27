@@ -236,6 +236,8 @@ model CardmarketProduct {
   importedAt   DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
   price        CardmarketPrice?
+  snapshots    CardmarketPriceSnapshot[]
+  signals      CardmarketSignal[]
 
   @@index([idCategory])
   @@index([idExpansion])
@@ -276,4 +278,85 @@ model CardmarketSyncStatus {
   pricesRecordCount     Int?
   lastError             String?
   updatedAt             DateTime @updatedAt
+}
+
+// Append-only Tages-Schnappschuss aller Preise. Selbstgebaute Historie (cm.md §2.1)
+// — Quelle für Δ7/Δ30, Chart-Linie und Backtest. Niemals löschen.
+model CardmarketPriceSnapshot {
+  id           BigInt   @id @default(autoincrement())
+  idProduct    Int
+  snapshotDate DateTime @db.Date
+  low          Float?
+  avg          Float?
+  trend        Float?
+  avg1         Float?
+  avg7         Float?
+  avg30        Float?
+  createdAt    DateTime @default(now())
+  product      CardmarketProduct @relation(fields: [idProduct], references: [idProduct], onDelete: Cascade)
+
+  @@unique([idProduct, snapshotDate])
+  @@index([snapshotDate])
+  @@index([idProduct, snapshotDate(sort: Desc)])
+}
+
+// Vorberechnete Signale pro Produkt pro Tag (cm.md §5).
+// Reasoning-Lines werden bei jedem Render aus Templates regeneriert — hier
+// nur die Werte/Klassifikation, damit Schwellwert-Änderungen ohne Daten-
+// Migration möglich sind (cm.md §14 Regel 4).
+model CardmarketSignal {
+  idProduct       Int
+  snapshotDate    DateTime @db.Date
+  lScore          Float?
+  mScore          Float?
+  delta7          Float?
+  delta30         Float?
+  movementClass   String?  // siehe signals/types.ts MovementClass
+  recommendation  String   // GREEN | AMBER | RED | NEUTRAL
+  headline        String
+  reasoningLines  Json     // string[]
+  sampleQuality   Float
+  computedAt      DateTime @default(now())
+  product         CardmarketProduct @relation(fields: [idProduct], references: [idProduct], onDelete: Cascade)
+
+  @@id([idProduct, snapshotDate])
+  @@index([snapshotDate, recommendation])
+  @@index([snapshotDate, delta7])
+  @@index([snapshotDate, mScore])
+  @@index([idProduct, snapshotDate(sort: Desc)])
+}
+
+// Set-Mapping mit Sprach-Info (cm.md §5). `parentExpansionId` verlinkt
+// Sprach-Geschwister: 151 EN canonical → 151 JP, KR zeigen darauf.
+// Wird in Phase 1 ohne parent-Links befüllt; Sprach-Pendant ist Phase 4.
+model CardmarketExpansion {
+  idExpansion       Int       @id
+  name              String
+  language          String    // EN|JP|DE|FR|IT|KR|ZH|PT
+  releaseDate       DateTime? @db.Date
+  parentExpansionId Int?
+  parent            CardmarketExpansion?  @relation("ExpansionSiblings", fields: [parentExpansionId], references: [idExpansion])
+  children          CardmarketExpansion[] @relation("ExpansionSiblings")
+  importedAt        DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([parentExpansionId])
+  @@index([language])
+}
+
+// History der Sync-Runs (cm.md §6 Step 7). CardmarketSyncStatus bleibt das
+// Singleton für die UI-Anzeige; dieser Log ist die volle Run-Historie.
+model CardmarketSyncLog {
+  id             BigInt    @id @default(autoincrement())
+  startedAt      DateTime
+  finishedAt     DateTime?
+  productsCount  Int?
+  snapshotsCount Int?
+  signalsCount   Int?
+  expansionsCount Int?
+  status         String    // running | ok | failed
+  errorMsg       String?
+  durationMs     Int?
+
+  @@index([startedAt(sort: Desc)])
 }

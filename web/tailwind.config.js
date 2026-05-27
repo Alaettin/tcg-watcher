@@ -14,6 +14,16 @@ export default {
           "sans-serif",
         ],
       },
+      colors: {
+        cm: {
+          green: "var(--cm-green)",
+          amber: "var(--cm-amber)",
+          red: "var(--cm-red)",
+          "green-soft": "var(--cm-green-soft)",
+          "amber-soft": "var(--cm-amber-soft)",
+          "red-soft": "var(--cm-red-soft)",
+        },
+      },
     },
   },
   plugins: [],

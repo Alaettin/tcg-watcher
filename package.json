@@ -35,6 +35,7 @@
     "build:server": "tsc",
     "build:web": "npm --prefix web run build",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/cardmarket/signals/__tests__/*.test.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"

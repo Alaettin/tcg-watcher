@@ -6,6 +6,9 @@ import { SetListsPage } from "./pages/SetLists";
 import { ShopsPage } from "./pages/Shops";
 import { ProspektePage } from "./pages/Prospekte";
 import { CardmarketPage } from "./pages/Cardmarket";
+import { CmDashboardPage } from "./pages/CmDashboard";
+import { CmMoversPage } from "./pages/CmMovers";
+import { CmProductPage } from "./pages/CmProduct";
 import { EventsPage } from "./pages/Events";
 import { SettingsPage } from "./pages/Settings";
 
@@ -20,7 +23,10 @@ export default function App() {
           <Route path="/lists" element={<SetListsPage />} />
           <Route path="/shops" element={<ShopsPage />} />
           <Route path="/prospekte" element={<ProspektePage />} />
-          <Route path="/cardmarket" element={<CardmarketPage />} />
+          <Route path="/cardmarket" element={<CmDashboardPage />} />
+          <Route path="/cardmarket/products" element={<CardmarketPage />} />
+          <Route path="/cardmarket/movers" element={<CmMoversPage />} />
+          <Route path="/cardmarket/p/:idProduct" element={<CmProductPage />} />
           <Route path="/events" element={<EventsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>

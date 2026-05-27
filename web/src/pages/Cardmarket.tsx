@@ -194,7 +194,7 @@ export function CardmarketPage() {
           <option value="">Alle Expansions ({expansions.data?.length ?? 0})</option>
           {(expansions.data ?? []).map((e) => (
             <option key={e.idExpansion} value={e.idExpansion}>
-              #{e.idExpansion} ({e.productCount})
+              {e.name ?? `Set ${e.idExpansion}`} ({e.productCount})
             </option>
           ))}
         </select>
