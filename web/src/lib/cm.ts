@@ -52,6 +52,38 @@ export function recommendationSoftBg(rec: CmRecommendation): string {
   }
 }
 
+/**
+ * Diverging Heatmap-Farbe für eine Set-Median-Δ7. Linear mapped:
+ *   -0.10 (= -10% in 7 Tagen) → satter Rot-Ton
+ *    0     → neutrales Grau
+ *   +0.10 → satter Grün-Ton
+ * Werte außerhalb werden geclamped. Null → Slate (kein Signal).
+ */
+export function heatmapColor(delta7: number | null): { bg: string; text: string } {
+  if (delta7 == null) return { bg: "rgb(148 163 184)", text: "rgb(15 23 42)" }; // slate-400
+  const clamped = Math.max(-0.10, Math.min(0.10, delta7));
+  const t = (clamped + 0.10) / 0.20; // 0..1
+  // RGB-Interpolation: rot (220, 60, 60) → grau (220, 220, 220) → grün (50, 170, 100).
+  let r: number, g: number, b: number;
+  if (t < 0.5) {
+    const u = t * 2; // 0..1 from rot → grau
+    r = 220;
+    g = Math.round(60 + (220 - 60) * u);
+    b = Math.round(60 + (220 - 60) * u);
+  } else {
+    const u = (t - 0.5) * 2; // 0..1 from grau → grün
+    r = Math.round(220 + (50 - 220) * u);
+    g = Math.round(220 + (170 - 220) * u);
+    b = Math.round(220 + (100 - 220) * u);
+  }
+  // Kontrast: helle Mittelfelder kriegen dunklen Text, satte Ränder hellen.
+  const isMid = Math.abs(t - 0.5) < 0.25;
+  return {
+    bg: `rgb(${r} ${g} ${b})`,
+    text: isMid ? "rgb(15 23 42)" : "rgb(255 255 255)",
+  };
+}
+
 export const MOVEMENT_LABEL_DE: Record<CmMovementClass, string> = {
   accelerating: "beschleunigt",
   stable_uptrend: "stabiler Aufwärtstrend",

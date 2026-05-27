@@ -1,12 +1,13 @@
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, TrendingUp, TrendingDown, Tag, ChevronRight, Star } from "lucide-react";
+import { RefreshCw, TrendingUp, TrendingDown, Tag, ChevronRight, Star, LayoutGrid } from "lucide-react";
 import clsx from "clsx";
 import { api } from "../lib/api";
 import { HighlightCard, MoverRow } from "../components/MoverRow";
 import { Sparkline } from "../components/Sparkline";
 import type {
   CardmarketDashboardResponse,
+  CardmarketSetListResponse,
   CardmarketWatchlistListResponse,
 } from "../lib/types";
 
@@ -41,6 +42,13 @@ export function CmDashboardPage() {
     queryKey: ["cm-watchlist"],
     queryFn: () => api.get<CardmarketWatchlistListResponse>("/api/cardmarket/watchlist"),
     staleTime: 30_000,
+  });
+
+  const sets = useQuery({
+    queryKey: ["cm-sets", "dashboard-tile"],
+    queryFn: () =>
+      api.get<CardmarketSetListResponse>("/api/cardmarket/sets?sort=hottest&minProducts=3"),
+    staleTime: 5 * 60_000,
   });
 
   const syncMutation = useMutation({
@@ -157,10 +165,16 @@ export function CmDashboardPage() {
       </section>
 
       {/* Block 4: Quick-Nav Tiles */}
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <QuickNav to="/cardmarket/movers?tab=risers" icon={TrendingUp} label="Top Risers" />
         <QuickNav to="/cardmarket/movers?tab=fallers" icon={TrendingDown} label="Top Fallers" />
         <QuickNav to="/cardmarket/movers?tab=deals" icon={Tag} label="Listing-Deals" />
+        <QuickNav
+          to="/cardmarket/sets"
+          icon={LayoutGrid}
+          label="Sets"
+          badge={sets.data?.total ?? 0}
+        />
         <QuickNav
           to="/cardmarket/watchlist"
           icon={Star}

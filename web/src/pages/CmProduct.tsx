@@ -10,7 +10,11 @@ import { ReasoningList } from "../components/ReasoningList";
 import { TrendChart } from "../components/TrendChart";
 import { WatchlistEditSheet } from "../components/WatchlistEditSheet";
 import { formatEur, formatPct, MOVEMENT_LABEL_DE } from "../lib/cm";
-import type { CardmarketProductSignalResponse, CardmarketWatchlistEntry } from "../lib/types";
+import type {
+  CardmarketPendantsResponse,
+  CardmarketProductSignalResponse,
+  CardmarketWatchlistEntry,
+} from "../lib/types";
 
 export function CmProductPage() {
   const { idProduct } = useParams<{ idProduct: string }>();
@@ -29,6 +33,15 @@ export function CmProductPage() {
     queryFn: () =>
       api.get<CardmarketWatchlistEntry | null>(`/api/cardmarket/products/${id}/watchlist`),
     enabled: Number.isFinite(id),
+  });
+
+  const pendants = useQuery({
+    queryKey: ["cm-product-pendants", id],
+    queryFn: () =>
+      api.get<CardmarketPendantsResponse>(`/api/cardmarket/products/${id}/pendants`),
+    enabled: Number.isFinite(id),
+    // Pendants ändern sich nicht oft (Sprach-Geschwister-Sets sind statisch).
+    staleTime: 5 * 60_000,
   });
 
   if (!Number.isFinite(id)) {
@@ -81,13 +94,15 @@ export function CmProductPage() {
         <h1 className="text-lg font-semibold mt-1 leading-snug">{p.name}</h1>
         <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-2">
           <span>{p.categoryName}</span>
-          {setContext?.name && (
-            <span>
-              · {setContext.name}
-              {setContext.language && <span className="ml-1 text-slate-400">{setContext.language}</span>}
-            </span>
+          {p.idExpansion > 0 && (
+            <Link
+              to={`/cardmarket/sets/${p.idExpansion}`}
+              className="hover:underline"
+            >
+              · {setContext?.name ?? `Set #${p.idExpansion}`}
+              {setContext?.language && <span className="ml-1 text-slate-400">{setContext.language}</span>}
+            </Link>
           )}
-          {!setContext?.name && p.idExpansion > 0 && <span>· Set #{p.idExpansion}</span>}
         </div>
         {signal && (
           <div className="mt-3">
@@ -142,7 +157,12 @@ export function CmProductPage() {
         <section className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
           <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Im Set</div>
           <div className="text-sm">
-            {setContext.name ?? `Set ${setContext.idExpansion}`}
+            <Link
+              to={`/cardmarket/sets/${setContext.idExpansion}`}
+              className="hover:underline"
+            >
+              {setContext.name ?? `Set ${setContext.idExpansion}`}
+            </Link>
             <span className="text-slate-400"> · {setContext.productCount} Produkte</span>
           </div>
           <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
@@ -163,6 +183,43 @@ export function CmProductPage() {
               </div>
             </div>
           </div>
+        </section>
+      )}
+
+      {/* Sprach-Pendants */}
+      {pendants.data && pendants.data.pendants.length > 0 && (
+        <section>
+          <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Sprach-Pendants</div>
+          <ul className="space-y-1 text-sm">
+            {pendants.data.pendants.map((p) => (
+              <li key={p.idProduct} className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wide text-slate-400 w-6">{p.language}</span>
+                <Link
+                  to={`/cardmarket/p/${p.idProduct}`}
+                  className="flex-1 min-w-0 hover:underline truncate"
+                  title={p.setName ?? undefined}
+                >
+                  {p.name}
+                </Link>
+                <span className="text-xs tabular-nums">{formatEur(p.trend)}</span>
+                {p.deviationFromBase != null && (
+                  <span
+                    className="text-xs tabular-nums w-14 text-right"
+                    style={{
+                      color:
+                        Math.abs(p.deviationFromBase) < 0.05
+                          ? "rgb(100 116 139)"
+                          : p.deviationFromBase < 0
+                          ? "var(--cm-green)"
+                          : "var(--cm-red)",
+                    }}
+                  >
+                    {formatPct(p.deviationFromBase)}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

@@ -11,6 +11,7 @@ import {
   ensureCardmarketDir,
 } from "../../cardmarket/storage.js";
 import { triggerCardmarketSyncNow } from "../../cardmarket/scheduler.js";
+import { runExpansionsScrape } from "../../cardmarket/expansionsImporter.js";
 
 export const cardmarketRouter = Router();
 
@@ -497,8 +498,306 @@ cardmarketRouter.get("/cardmarket/products/:idProduct/history", async (req, res,
 });
 
 // ----------------------------------------------------------------------------
-// Set-Signal
+// Sprach-Pendants (Phase 4): findet zum Produkt das Pendant in den
+// Sprach-Geschwister-Sets, gematcht über normalisierten Produktnamen.
 // ----------------------------------------------------------------------------
+
+interface PendantRow {
+  idProduct: number;
+  name: string;
+  language: string;
+  trend: number | null;
+  setName: string | null;
+  idExpansion: number;
+}
+
+cardmarketRouter.get("/cardmarket/products/:idProduct/pendants", async (req, res, next) => {
+  try {
+    const id = Number(req.params.idProduct);
+    if (!Number.isInteger(id)) {
+      res.status(400).json({ error: "idProduct must be an integer" });
+      return;
+    }
+
+    // 1. Basis-Produkt mit Set + Sprach-Geschwister-Sets bestimmen.
+    const base = await prisma.$queryRaw<
+      {
+        name: string;
+        idExpansion: number;
+        parentExpansionId: number | null;
+        trend: number | null;
+      }[]
+    >`
+      SELECT
+        p."name",
+        p."idExpansion",
+        e."parentExpansionId",
+        pr."trend"
+      FROM "CardmarketProduct" p
+      LEFT JOIN "CardmarketExpansion" e ON e."idExpansion" = p."idExpansion"
+      LEFT JOIN "CardmarketPrice" pr ON pr."idProduct" = p."idProduct"
+      WHERE p."idProduct" = ${id}
+    `;
+    if (base.length === 0) {
+      res.status(404).json({ error: "product not found" });
+      return;
+    }
+    const me = base[0]!;
+    const baseTrend = me.trend;
+
+    // 2. Sprach-Geschwister-Sets identifizieren (selbe parent, oder Kinder
+    // dieses Sets, oder das parent selbst). Einfach: alle Sets im selben
+    // Sprach-Cluster.
+    const siblingIds = await prisma.$queryRaw<{ idExpansion: number }[]>`
+      WITH target AS (
+        SELECT "idExpansion", "parentExpansionId"
+        FROM "CardmarketExpansion"
+        WHERE "idExpansion" = ${me.idExpansion}
+      )
+      SELECT e."idExpansion"
+      FROM "CardmarketExpansion" e
+      WHERE e."idExpansion" != ${me.idExpansion}
+        AND (
+          e."idExpansion" = (SELECT "parentExpansionId" FROM target)
+          OR e."parentExpansionId" = (SELECT "idExpansion" FROM target)
+          OR (
+            (SELECT "parentExpansionId" FROM target) IS NOT NULL
+            AND e."parentExpansionId" = (SELECT "parentExpansionId" FROM target)
+          )
+        )
+    `;
+
+    if (siblingIds.length === 0) {
+      res.json({ pendants: [], baseTrend });
+      return;
+    }
+    const siblingIdList = siblingIds.map((r) => r.idExpansion);
+
+    // 3. In jedem Geschwister-Set Produkt mit demselben normalisierten Namen suchen.
+    // Wir berechnen die Normalisierung in JS (regex_replace in PG ist umständlicher).
+    const baseNormalized = normalizeForMatch(me.name);
+    const baseKeywords = extractKeywords(me.name);
+
+    const candidates = await prisma.$queryRaw<PendantRow[]>`
+      SELECT
+        p."idProduct",
+        p."name",
+        e."language",
+        pr."trend",
+        e."name" AS "setName",
+        p."idExpansion"
+      FROM "CardmarketProduct" p
+      JOIN "CardmarketExpansion" e ON e."idExpansion" = p."idExpansion"
+      LEFT JOIN "CardmarketPrice" pr ON pr."idProduct" = p."idProduct"
+      WHERE p."idExpansion" IN (${Prisma.join(siblingIdList)})
+    `;
+
+    // 4. Pro Sprache den besten Match wählen.
+    const byLanguage = new Map<string, { row: PendantRow; score: number }>();
+    for (const c of candidates) {
+      const score = matchScore(baseNormalized, baseKeywords, c.name);
+      if (score < 0.6) continue;
+      const existing = byLanguage.get(c.language);
+      if (!existing || score > existing.score) {
+        byLanguage.set(c.language, { row: c, score });
+      }
+    }
+
+    const pendants = Array.from(byLanguage.values()).map(({ row }) => ({
+      idProduct: row.idProduct,
+      name: row.name,
+      language: row.language,
+      idExpansion: row.idExpansion,
+      setName: row.setName,
+      trend: row.trend,
+      deviationFromBase:
+        row.trend != null && baseTrend != null && baseTrend > 0
+          ? (row.trend - baseTrend) / baseTrend
+          : null,
+    }));
+
+    res.json({ pendants, baseTrend });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Heuristische Match-Hilfsfunktionen für Sprach-Pendants. */
+function normalizeForMatch(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\(jp\)|\(kr\)|\(de\)|\(fr\)|\(it\)|\(es\)|\(pt\)|\(zh\)|\(cn\)/gi, "")
+    .replace(/\b(japanese|korean|german|deutsch|french|französisch|italian|italienisch|spanish|spanisch|portuguese|portugiesisch|chinese|chinesisch)\b/gi, "")
+    .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const KEYWORDS = [
+  "elite trainer box",
+  "etb",
+  "booster box",
+  "booster bundle",
+  "booster pack",
+  "booster",
+  "display",
+  "tin",
+  "collection",
+  "blister",
+  "premium",
+  "ultra premium",
+] as const;
+
+function extractKeywords(name: string): string[] {
+  const lower = name.toLowerCase();
+  return KEYWORDS.filter((k) => lower.includes(k));
+}
+
+function matchScore(baseNorm: string, baseKw: string[], candidate: string): number {
+  const candNorm = normalizeForMatch(candidate);
+  const candKw = extractKeywords(candidate);
+
+  // Variant-Keyword muss matchen (z.B. beide "ETB"). Wenn beide keine
+  // Keywords haben, akzeptieren wir Name-Levenshtein-Ähnlichkeit.
+  if (baseKw.length > 0 || candKw.length > 0) {
+    const overlap = baseKw.filter((k) => candKw.includes(k)).length;
+    if (overlap === 0) return 0;
+  }
+
+  // Token-Overlap statt vollwertiger Levenshtein — schnell und reicht für
+  // unsere Zwecke (Set-Name + Produkt-Typ in beiden Strings sollten matchen).
+  const baseTokens = new Set(baseNorm.split(" ").filter((t) => t.length >= 2));
+  const candTokens = new Set(candNorm.split(" ").filter((t) => t.length >= 2));
+  if (baseTokens.size === 0 || candTokens.size === 0) return 0;
+  let intersect = 0;
+  for (const t of baseTokens) if (candTokens.has(t)) intersect++;
+  const union = new Set([...baseTokens, ...candTokens]).size;
+  return intersect / union;  // Jaccard
+}
+
+// ----------------------------------------------------------------------------
+// Sets — Übersicht (Phase 4)
+// ----------------------------------------------------------------------------
+
+const SetsListQuery = z.object({
+  sort: z.enum(["hottest", "coldest", "volatile", "newest", "name"]).default("hottest"),
+  language: z.string().max(8).optional(),
+  minProducts: z.coerce.number().int().min(0).default(1),
+});
+
+interface SetSummaryRow {
+  idExpansion: number;
+  name: string;
+  language: string;
+  releaseDate: Date | null;
+  productCount: number | null;
+  medianL: number | null;
+  medianDelta7: number | null;
+  volatilityDelta7: number | null;
+  greenCount: number | null;
+  amberCount: number | null;
+  redCount: number | null;
+  neutralCount: number | null;
+}
+
+function serializeSetSummary(row: SetSummaryRow) {
+  return {
+    idExpansion: row.idExpansion,
+    name: row.name,
+    language: row.language,
+    releaseDate: row.releaseDate ? row.releaseDate.toISOString().slice(0, 10) : null,
+    productCount: row.productCount ?? 0,
+    medianL: row.medianL,
+    medianDelta7: row.medianDelta7,
+    volatilityDelta7: row.volatilityDelta7,
+    ampelDistribution: {
+      GREEN: row.greenCount ?? 0,
+      AMBER: row.amberCount ?? 0,
+      RED: row.redCount ?? 0,
+      NEUTRAL: row.neutralCount ?? 0,
+    },
+  };
+}
+
+cardmarketRouter.get("/cardmarket/sets", async (req, res, next) => {
+  try {
+    const parsed = SetsListQuery.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid query", issues: parsed.error.issues });
+      return;
+    }
+    const { sort, language, minProducts } = parsed.data;
+
+    const orderBy = (() => {
+      switch (sort) {
+        case "hottest":   return Prisma.sql`mv."medianDelta7" DESC NULLS LAST`;
+        case "coldest":   return Prisma.sql`mv."medianDelta7" ASC NULLS LAST`;
+        case "volatile":  return Prisma.sql`mv."volatilityDelta7" DESC NULLS LAST`;
+        case "newest":    return Prisma.sql`e."releaseDate" DESC NULLS LAST`;
+        case "name":      return Prisma.sql`e."name" ASC`;
+      }
+    })();
+
+    const filters: Prisma.Sql[] = [Prisma.sql`COALESCE(mv."productCount", 0) >= ${minProducts}`];
+    if (language) filters.push(Prisma.sql`e."language" = ${language}`);
+    const whereSql = Prisma.join(filters, " AND ");
+
+    const rows = await prisma.$queryRaw<SetSummaryRow[]>`
+      SELECT
+        e."idExpansion",
+        e."name",
+        e."language",
+        e."releaseDate",
+        mv."productCount",
+        mv."medianL",
+        mv."medianDelta7",
+        mv."volatilityDelta7",
+        dist."greenCount",
+        dist."amberCount",
+        dist."redCount",
+        dist."neutralCount"
+      FROM "CardmarketExpansion" e
+      LEFT JOIN LATERAL (
+        SELECT "productCount", "medianL", "medianDelta7", "volatilityDelta7"
+        FROM "CardmarketSetSignalDaily"
+        WHERE "idExpansion" = e."idExpansion"
+        ORDER BY "snapshotDate" DESC
+        LIMIT 1
+      ) mv ON true
+      LEFT JOIN LATERAL (
+        SELECT
+          SUM(CASE WHEN s."recommendation" = 'GREEN'   THEN 1 ELSE 0 END)::int AS "greenCount",
+          SUM(CASE WHEN s."recommendation" = 'AMBER'   THEN 1 ELSE 0 END)::int AS "amberCount",
+          SUM(CASE WHEN s."recommendation" = 'RED'     THEN 1 ELSE 0 END)::int AS "redCount",
+          SUM(CASE WHEN s."recommendation" = 'NEUTRAL' THEN 1 ELSE 0 END)::int AS "neutralCount"
+        FROM "CardmarketSignal" s
+        JOIN "CardmarketProduct" p ON p."idProduct" = s."idProduct"
+        WHERE p."idExpansion" = e."idExpansion"
+          AND s."snapshotDate" = (SELECT MAX("snapshotDate") FROM "CardmarketSignal")
+      ) dist ON true
+      WHERE ${whereSql}
+      ORDER BY ${orderBy}
+    `;
+
+    res.json({ results: rows.map(serializeSetSummary), total: rows.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ----------------------------------------------------------------------------
+// Set-Signal — Detail mit Sprach-Geschwistern + Ampel-Distribution
+// ----------------------------------------------------------------------------
+
+interface SiblingRow {
+  idExpansion: number;
+  name: string;
+  language: string;
+  productCount: number | null;
+  medianL: number | null;
+  medianDelta7: number | null;
+}
+
 cardmarketRouter.get("/cardmarket/sets/:idExpansion/signal", async (req, res, next) => {
   try {
     const id = Number(req.params.idExpansion);
@@ -506,30 +805,40 @@ cardmarketRouter.get("/cardmarket/sets/:idExpansion/signal", async (req, res, ne
       res.status(400).json({ error: "idExpansion must be an integer" });
       return;
     }
-    const [setRow, products] = await Promise.all([
+
+    const [setRow, products, siblings, dist] = await Promise.all([
       prisma.$queryRaw<
         {
           idExpansion: number;
-          productCount: number;
+          productCount: number | null;
           medianL: number | null;
           medianDelta7: number | null;
           volatilityDelta7: number | null;
           name: string | null;
           language: string | null;
+          releaseDate: Date | null;
+          parentExpansionId: number | null;
         }[]
       >`
         SELECT
-          mv."idExpansion",
+          e."idExpansion",
+          e."name",
+          e."language",
+          e."releaseDate",
+          e."parentExpansionId",
           mv."productCount",
           mv."medianL",
           mv."medianDelta7",
-          mv."volatilityDelta7",
-          e."name",
-          e."language"
-        FROM "CardmarketSetSignalDaily" mv
-        LEFT JOIN "CardmarketExpansion" e ON e."idExpansion" = mv."idExpansion"
-        WHERE mv."idExpansion" = ${id}
-        ORDER BY mv."snapshotDate" DESC
+          mv."volatilityDelta7"
+        FROM "CardmarketExpansion" e
+        LEFT JOIN LATERAL (
+          SELECT "productCount", "medianL", "medianDelta7", "volatilityDelta7"
+          FROM "CardmarketSetSignalDaily"
+          WHERE "idExpansion" = e."idExpansion"
+          ORDER BY "snapshotDate" DESC
+          LIMIT 1
+        ) mv ON true
+        WHERE e."idExpansion" = ${id}
         LIMIT 1
       `,
       prisma.$queryRaw<SignalRow[]>`
@@ -545,11 +854,124 @@ cardmarketRouter.get("/cardmarket/sets/:idExpansion/signal", async (req, res, ne
           AND s."snapshotDate" = (SELECT MAX("snapshotDate") FROM "CardmarketSignal")
         ORDER BY s."delta7" DESC NULLS LAST
       `,
+      // Sprach-Geschwister: alle Expansions die denselben parent haben wie
+      // dieser Set ODER deren parent dieser Set ist (falls dieser Set selbst
+      // der canonical EN-Set ist).
+      prisma.$queryRaw<SiblingRow[]>`
+        WITH target AS (
+          SELECT "idExpansion", "parentExpansionId"
+          FROM "CardmarketExpansion"
+          WHERE "idExpansion" = ${id}
+        )
+        SELECT
+          e."idExpansion",
+          e."name",
+          e."language",
+          mv."productCount",
+          mv."medianL",
+          mv."medianDelta7"
+        FROM "CardmarketExpansion" e
+        LEFT JOIN LATERAL (
+          SELECT "productCount", "medianL", "medianDelta7"
+          FROM "CardmarketSetSignalDaily"
+          WHERE "idExpansion" = e."idExpansion"
+          ORDER BY "snapshotDate" DESC LIMIT 1
+        ) mv ON true
+        WHERE e."idExpansion" != ${id}
+          AND (
+            e."idExpansion" = (SELECT "parentExpansionId" FROM target)
+            OR e."parentExpansionId" = (SELECT "idExpansion" FROM target)
+            OR (
+              (SELECT "parentExpansionId" FROM target) IS NOT NULL
+              AND e."parentExpansionId" = (SELECT "parentExpansionId" FROM target)
+            )
+          )
+        ORDER BY e."language"
+      `,
+      prisma.$queryRaw<{ greenCount: number; amberCount: number; redCount: number; neutralCount: number }[]>`
+        SELECT
+          SUM(CASE WHEN s."recommendation" = 'GREEN'   THEN 1 ELSE 0 END)::int AS "greenCount",
+          SUM(CASE WHEN s."recommendation" = 'AMBER'   THEN 1 ELSE 0 END)::int AS "amberCount",
+          SUM(CASE WHEN s."recommendation" = 'RED'     THEN 1 ELSE 0 END)::int AS "redCount",
+          SUM(CASE WHEN s."recommendation" = 'NEUTRAL' THEN 1 ELSE 0 END)::int AS "neutralCount"
+        FROM "CardmarketSignal" s
+        JOIN "CardmarketProduct" p ON p."idProduct" = s."idProduct"
+        WHERE p."idExpansion" = ${id}
+          AND s."snapshotDate" = (SELECT MAX("snapshotDate") FROM "CardmarketSignal")
+      `,
     ]);
 
+    const setData = setRow[0]
+      ? {
+          idExpansion: setRow[0].idExpansion,
+          name: setRow[0].name,
+          language: setRow[0].language,
+          releaseDate: setRow[0].releaseDate
+            ? setRow[0].releaseDate.toISOString().slice(0, 10)
+            : null,
+          parentExpansionId: setRow[0].parentExpansionId,
+          productCount: setRow[0].productCount ?? 0,
+          medianL: setRow[0].medianL,
+          medianDelta7: setRow[0].medianDelta7,
+          volatilityDelta7: setRow[0].volatilityDelta7,
+        }
+      : null;
+
+    const distRow = dist[0];
     res.json({
-      set: setRow[0] ?? null,
+      set: setData,
       products: products.map(serializeSignalRow),
+      siblings,
+      ampelDistribution: {
+        GREEN: distRow?.greenCount ?? 0,
+        AMBER: distRow?.amberCount ?? 0,
+        RED: distRow?.redCount ?? 0,
+        NEUTRAL: distRow?.neutralCount ?? 0,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ----------------------------------------------------------------------------
+// Set-History — Median-trend über Zeit für Aggregat-Chart
+// ----------------------------------------------------------------------------
+cardmarketRouter.get("/cardmarket/sets/:idExpansion/history", async (req, res, next) => {
+  try {
+    const id = Number(req.params.idExpansion);
+    if (!Number.isInteger(id)) {
+      res.status(400).json({ error: "idExpansion must be an integer" });
+      return;
+    }
+    const range = (() => {
+      const r = String(req.query.range ?? "30d");
+      return r === "7d" || r === "30d" || r === "90d" || r === "all" ? r : "30d";
+    })();
+    const dateFilter =
+      range === "all"
+        ? Prisma.sql`TRUE`
+        : Prisma.sql`pr."snapshotDate" >= CURRENT_DATE - (${range === "7d" ? 7 : range === "30d" ? 30 : 90}::int * INTERVAL '1 day')`;
+
+    const rows = await prisma.$queryRaw<{ snapshotDate: Date; medianTrend: number | null }[]>`
+      SELECT
+        pr."snapshotDate",
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY pr."trend") AS "medianTrend"
+      FROM "CardmarketPriceSnapshot" pr
+      JOIN "CardmarketProduct" p ON p."idProduct" = pr."idProduct"
+      WHERE p."idExpansion" = ${id}
+        AND pr."trend" IS NOT NULL
+        AND ${dateFilter}
+      GROUP BY pr."snapshotDate"
+      ORDER BY pr."snapshotDate" ASC
+    `;
+
+    res.json({
+      range,
+      points: rows.map((r) => ({
+        date: r.snapshotDate.toISOString().slice(0, 10),
+        medianTrend: r.medianTrend == null ? null : Number(r.medianTrend),
+      })),
     });
   } catch (err) {
     next(err);
@@ -760,6 +1182,17 @@ cardmarketRouter.post("/admin/cardmarket/recompute-signals", async (_req, res, n
     const jobId = await triggerCardmarketSyncNow({ signalsOnly: true });
     logger.info({ jobId }, "cardmarket signals recompute triggered via api");
     res.json({ ok: true, jobId });
+  } catch (err) {
+    next(err);
+  }
+});
+
+cardmarketRouter.post("/admin/cardmarket/scrape-expansions", async (_req, res, next) => {
+  try {
+    // Synchron in der Request — Scrape ist 1 HTTP-Request + Upsert, dauert ~5s.
+    const result = await runExpansionsScrape();
+    logger.info(result, "expansions scrape triggered via api");
+    res.json({ ok: true, ...result });
   } catch (err) {
     next(err);
   }
