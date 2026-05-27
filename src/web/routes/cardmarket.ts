@@ -728,10 +728,27 @@ function serializeSyncLog(log: {
 // ----------------------------------------------------------------------------
 // Admin-Endpoints
 // ----------------------------------------------------------------------------
-cardmarketRouter.post("/admin/cardmarket/sync", async (_req, res, next) => {
+const SyncBodySchema = z
+  .object({
+    // skipDownload=true nutzt die letzten lokalen JSON-Dumps statt CM neu zu
+    // ziehen. Praktisch wenn CM gerade SSL-Probleme hat oder du nach dem
+    // Aufsetzen erstmal mit cached Daten testen willst. Achtung: Snapshots
+    // werden trotzdem fuer heute angelegt — wenn die Files alt sind, sind
+    // die Snapshots eben aus dieser alten Quelle.
+    skipDownload: z.boolean().optional(),
+    // signalsOnly=true ueberspringt Step 1-4 komplett; nur Step 5 (Signale)
+    // laeuft. Sinnvoll nach Schwellwert-Aenderung. Watchlist-Alerts werden
+    // dann bewusst NICHT gefeuert.
+    signalsOnly: z.boolean().optional(),
+  })
+  .optional();
+
+cardmarketRouter.post("/admin/cardmarket/sync", async (req, res, next) => {
   try {
-    const jobId = await triggerCardmarketSyncNow();
-    logger.info({ jobId }, "cardmarket sync triggered via api");
+    const parsed = SyncBodySchema.safeParse(req.body);
+    const opts = parsed.success ? (parsed.data ?? {}) : {};
+    const jobId = await triggerCardmarketSyncNow(opts);
+    logger.info({ jobId, opts }, "cardmarket sync triggered via api");
     res.json({ ok: true, jobId });
   } catch (err) {
     next(err);
