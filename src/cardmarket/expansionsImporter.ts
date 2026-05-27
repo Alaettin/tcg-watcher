@@ -50,20 +50,6 @@ export function detectLanguage(name: string): string {
   return "EN";
 }
 
-/**
- * Set-Name auf Vergleichs-Form normalisieren: Sprach-Suffix abschneiden,
- * Whitespace + Sonderzeichen entfernen, lowercase. Damit findet das
- * Parent-Mapping „151 (JP)" und „151" als denselben Basis-Set.
- */
-export function normalizeSetName(name: string): string {
-  return name
-    .replace(/\(JP\)|\(KR\)|\(DE\)|\(FR\)|\(IT\)|\(ES\)|\(PT\)|\(ZH\)|\(CN\)/gi, "")
-    .replace(/\b(Japanese|Korean|German|Deutsch|French|Französ\w*|Italian|Italien\w*|Spanish|Spanisch|Portuguese|Portugies\w*|Chinese|Chines\w*)\b/gi, "")
-    .replace(/[^\p{L}\p{N}]+/gu, "")
-    .toLowerCase()
-    .trim();
-}
-
 function toDateOrNull(v: string | null | undefined): Date | null {
   if (!v) return null;
   const d = new Date(v);
@@ -80,8 +66,6 @@ export interface ExpansionImportResult {
   count: number;
   /** "file" = expansions_6.json, "scrape" = CM-Web-Scraper, "bootstrap" = ID-only-Fallback */
   source: "file" | "scrape" | "bootstrap";
-  /** Wie viele Parent-Links nach dem Import gesetzt werden konnten. */
-  parentsLinked?: number;
 }
 
 /**
@@ -89,7 +73,6 @@ export interface ExpansionImportResult {
  *   1. expansions_6.json (falls vorhanden)
  *   2. Cheerio-Scraper auf cardmarket.com (Phase 4 — Web-basiert, keine JSON nötig)
  *   3. Bootstrap-Fallback: nur idExpansion aus CardmarketProduct, Namen als "Set {id}"
- * Nach erfolgreichem Import (außer Bootstrap) wird parentExpansionId gesetzt.
  */
 export async function importExpansions(): Promise<ExpansionImportResult> {
   const log = logger.child({ scope: "cm-import-expansions" });
@@ -103,9 +86,7 @@ export async function importExpansions(): Promise<ExpansionImportResult> {
   }
 
   if (fileExists) {
-    const result = await importFromFile();
-    const parentsLinked = await linkParentExpansions();
-    return { ...result, parentsLinked };
+    return await importFromFile();
   }
 
   // expansions_6.json fehlt → Scraper versuchen.
@@ -114,8 +95,7 @@ export async function importExpansions(): Promise<ExpansionImportResult> {
   if (scraped.length > 0) {
     const written = await upsertScrapedExpansions(scraped);
     log.info({ written }, "expansions from scrape upserted");
-    const parentsLinked = await linkParentExpansions();
-    return { count: written, source: "scrape", parentsLinked };
+    return { count: written, source: "scrape" };
   }
 
   // Letzter Fallback: Bootstrap aus den vorhandenen Produkt-Set-IDs.
@@ -144,11 +124,11 @@ async function importFromFile(): Promise<{ count: number; source: "file" }> {
 
     const now = new Date();
     const values = valid.map(({ e, name, language }) => {
-      return Prisma.sql`(${e.idExpansion}, ${name}, ${language}, ${toDateOrNull(e.releaseDate ?? null)}, ${null}, ${now}, ${now})`;
+      return Prisma.sql`(${e.idExpansion}, ${name}, ${language}, ${toDateOrNull(e.releaseDate ?? null)}, ${now}, ${now})`;
     });
     await prisma.$executeRaw`
       INSERT INTO "CardmarketExpansion"
-        ("idExpansion","name","language","releaseDate","parentExpansionId","importedAt","updatedAt")
+        ("idExpansion","name","language","releaseDate","importedAt","updatedAt")
       VALUES ${Prisma.join(values)}
       ON CONFLICT ("idExpansion") DO UPDATE SET
         "name" = EXCLUDED."name",
@@ -164,19 +144,18 @@ async function importFromFile(): Promise<{ count: number; source: "file" }> {
 
 /**
  * Public Convenience: einmaliger Scrape-Run für Admin-Endpoints. Holt
- * frische Set-Daten von der CM-Webseite, upserted, und setzt parent-Links.
+ * frische Set-Daten von der CM-Webseite und upserted die Namen.
  */
-export async function runExpansionsScrape(): Promise<{ scraped: number; written: number; parentsLinked: number }> {
+export async function runExpansionsScrape(): Promise<{ scraped: number; written: number }> {
   const log = logger.child({ scope: "cm-run-scrape" });
   const scraped = await scrapeExpansions();
   if (scraped.length === 0) {
     log.warn("scraper lieferte keine Daten — keine Aenderungen");
-    return { scraped: 0, written: 0, parentsLinked: 0 };
+    return { scraped: 0, written: 0 };
   }
   const written = await upsertScrapedExpansions(scraped);
-  const parentsLinked = await linkParentExpansions();
-  log.info({ scraped: scraped.length, written, parentsLinked }, "scrape run complete");
-  return { scraped: scraped.length, written, parentsLinked };
+  log.info({ scraped: scraped.length, written }, "scrape run complete");
+  return { scraped: scraped.length, written };
 }
 
 async function upsertScrapedExpansions(
@@ -195,11 +174,11 @@ async function upsertScrapedExpansions(
 
     const now = new Date();
     const values = valid.map(({ idExpansion, name, language }) => {
-      return Prisma.sql`(${idExpansion}, ${name}, ${language}, ${null}, ${null}, ${now}, ${now})`;
+      return Prisma.sql`(${idExpansion}, ${name}, ${language}, ${null}, ${now}, ${now})`;
     });
     await prisma.$executeRaw`
       INSERT INTO "CardmarketExpansion"
-        ("idExpansion","name","language","releaseDate","parentExpansionId","importedAt","updatedAt")
+        ("idExpansion","name","language","releaseDate","importedAt","updatedAt")
       VALUES ${Prisma.join(values)}
       ON CONFLICT ("idExpansion") DO UPDATE SET
         "name" = EXCLUDED."name",
@@ -209,47 +188,6 @@ async function upsertScrapedExpansions(
     written += valid.length;
   }
   return written;
-}
-
-/**
- * Setzt für jeden nicht-EN-Set einen passenden parentExpansionId, indem wir
- * Sets mit gleichem normalisierten Namen + Sprache "EN" suchen. Idempotent —
- * darf nach jedem Import laufen, überschreibt keine bereits gesetzten Werte
- * mit null.
- */
-export async function linkParentExpansions(): Promise<number> {
-  const log = logger.child({ scope: "cm-link-parents" });
-
-  const all = await prisma.cardmarketExpansion.findMany({
-    select: { idExpansion: true, name: true, language: true, parentExpansionId: true },
-  });
-
-  // Normalisierten Namen → idExpansion-der-EN-Variante mappen.
-  const enByKey = new Map<string, number>();
-  for (const row of all) {
-    if (row.language === "EN") {
-      const key = normalizeSetName(row.name);
-      if (key && !enByKey.has(key)) enByKey.set(key, row.idExpansion);
-    }
-  }
-
-  // Für alle Nicht-EN-Sets: passenden EN-Parent suchen + setzen.
-  let linked = 0;
-  for (const row of all) {
-    if (row.language === "EN") continue;
-    if (row.parentExpansionId != null) continue;  // schon verlinkt
-    const key = normalizeSetName(row.name);
-    const parentId = enByKey.get(key);
-    if (!parentId || parentId === row.idExpansion) continue;
-    await prisma.cardmarketExpansion.update({
-      where: { idExpansion: row.idExpansion },
-      data: { parentExpansionId: parentId },
-    });
-    linked++;
-  }
-
-  log.info({ linked }, "parent expansions linked");
-  return linked;
 }
 
 async function bootstrapFromProducts(): Promise<{ count: number; source: "bootstrap" }> {
@@ -268,11 +206,11 @@ async function bootstrapFromProducts(): Promise<{ count: number; source: "bootst
 
   const now = new Date();
   const values = distinct.map((r) => {
-    return Prisma.sql`(${r.idExpansion}, ${`Set ${r.idExpansion}`}, ${"EN"}, ${null}, ${null}, ${now}, ${now})`;
+    return Prisma.sql`(${r.idExpansion}, ${`Set ${r.idExpansion}`}, ${"EN"}, ${null}, ${now}, ${now})`;
   });
   await prisma.$executeRaw`
     INSERT INTO "CardmarketExpansion"
-      ("idExpansion","name","language","releaseDate","parentExpansionId","importedAt","updatedAt")
+      ("idExpansion","name","language","releaseDate","importedAt","updatedAt")
     VALUES ${Prisma.join(values)}
     ON CONFLICT ("idExpansion") DO NOTHING
   `;

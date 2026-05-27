@@ -18,21 +18,17 @@ const TABS: Array<{ value: Sort; label: string }> = [
   { value: "name", label: "A-Z" },
 ];
 
-const LANGUAGES = ["EN", "JP", "KR", "DE", "FR", "IT", "ES", "PT", "ZH"];
-
 export function CmSetsPage() {
   const qc = useQueryClient();
   const [sort, setSort] = useState<Sort>("hottest");
-  const [language, setLanguage] = useState<string>("");
   const [minProducts, setMinProducts] = useState<number>(3);
 
   const queryString = useMemo(() => {
     const sp = new URLSearchParams();
     sp.set("sort", sort);
-    if (language) sp.set("language", language);
     sp.set("minProducts", String(minProducts));
     return sp.toString();
-  }, [sort, language, minProducts]);
+  }, [sort, minProducts]);
 
   const list = useQuery({
     queryKey: ["cm-sets", queryString],
@@ -95,18 +91,6 @@ export function CmSetsPage() {
         </div>
         <div className="flex items-center gap-2">
           <select
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            className="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
-          >
-            <option value="">Alle Sprachen</option>
-            {LANGUAGES.map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
-          <select
             value={String(minProducts)}
             onChange={(e) => setMinProducts(Number(e.target.value))}
             className="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
@@ -155,10 +139,7 @@ function SetListRow({ s }: { s: CardmarketSetSummary }) {
     >
       <div className="flex items-center gap-3">
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-sm truncate">
-            {s.name}
-            <span className="ml-2 text-[10px] text-slate-400">{s.language}</span>
-          </div>
+          <div className="font-medium text-sm truncate">{s.name}</div>
           <div className="text-[11px] text-slate-500">
             {s.productCount} Produkte
             {s.releaseDate && <> · Release {s.releaseDate}</>}

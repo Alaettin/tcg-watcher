@@ -426,21 +426,12 @@ export interface CardmarketSetDetail {
     name: string | null;
     language: string | null;
     releaseDate: string | null;
-    parentExpansionId: number | null;
     productCount: number;
     medianL: number | null;
     medianDelta7: number | null;
     volatilityDelta7: number | null;
   } | null;
   products: CardmarketSignalSummary[];
-  siblings: Array<{
-    idExpansion: number;
-    name: string;
-    language: string;
-    productCount: number | null;
-    medianL: number | null;
-    medianDelta7: number | null;
-  }>;
   ampelDistribution: CardmarketAmpelDistribution;
 }
 
@@ -452,22 +443,6 @@ export interface CardmarketSetHistoryPoint {
 export interface CardmarketSetHistoryResponse {
   range: "7d" | "30d" | "90d" | "all";
   points: CardmarketSetHistoryPoint[];
-}
-
-export interface CardmarketLanguagePendant {
-  idProduct: number;
-  name: string;
-  language: string;
-  idExpansion: number;
-  setName: string | null;
-  trend: number | null;
-  /** (pendant.trend - base.trend) / base.trend, oder null */
-  deviationFromBase: number | null;
-}
-
-export interface CardmarketPendantsResponse {
-  pendants: CardmarketLanguagePendant[];
-  baseTrend: number | null;
 }
 
 export interface CardmarketDashboardResponse {

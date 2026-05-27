@@ -327,21 +327,17 @@ model CardmarketSignal {
   @@index([idProduct, snapshotDate(sort: Desc)])
 }
 
-// Set-Mapping mit Sprach-Info (cm.md §5). `parentExpansionId` verlinkt
-// Sprach-Geschwister: 151 EN canonical → 151 JP, KR zeigen darauf.
-// Wird in Phase 1 ohne parent-Links befüllt; Sprach-Pendant ist Phase 4.
+// Set-Stammdaten. Sprach-Pendant-Feature wurde in Phase 4 verworfen
+// (JP/EN-Sets sind eigenständige Sammlerprodukte, kein Arbitrage-Use-Case);
+// daher kein parentExpansionId-Mapping mehr.
 model CardmarketExpansion {
-  idExpansion       Int       @id
-  name              String
-  language          String    // EN|JP|DE|FR|IT|KR|ZH|PT
-  releaseDate       DateTime? @db.Date
-  parentExpansionId Int?
-  parent            CardmarketExpansion?  @relation("ExpansionSiblings", fields: [parentExpansionId], references: [idExpansion])
-  children          CardmarketExpansion[] @relation("ExpansionSiblings")
-  importedAt        DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  idExpansion  Int       @id
+  name         String
+  language     String    // EN|JP|DE|FR|IT|KR|ZH|PT — heute meist EN, weil CM keine zuverlässige Sprach-Quelle hat
+  releaseDate  DateTime? @db.Date
+  importedAt   DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  @@index([parentExpansionId])
   @@index([language])
 }
 

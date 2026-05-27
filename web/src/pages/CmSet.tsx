@@ -58,7 +58,7 @@ export function CmSetPage() {
     );
   }
 
-  const { set, products, siblings, ampelDistribution } = detail.data;
+  const { set, products, ampelDistribution } = detail.data;
   const points = history.data?.points ?? [];
 
   return (
@@ -70,7 +70,6 @@ export function CmSetPage() {
         </Link>
         <h1 className="text-xl font-semibold mt-1">
           {set.name ?? `Set ${set.idExpansion}`}
-          <span className="ml-2 text-xs font-normal text-slate-500">{set.language ?? ""}</span>
         </h1>
         <div className="text-xs text-slate-500 mt-0.5">
           {set.productCount} Produkte
@@ -154,31 +153,6 @@ export function CmSetPage() {
           </div>
         )}
       </section>
-
-      {/* Sprach-Geschwister */}
-      {siblings.length > 0 && (
-        <section>
-          <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Sprach-Pendants</div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {siblings.map((s) => (
-              <Link
-                key={s.idExpansion}
-                to={`/cardmarket/sets/${s.idExpansion}`}
-                className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 hover:bg-slate-50 dark:hover:bg-slate-800/40"
-              >
-                <div className="text-xs font-medium truncate">
-                  {s.name}
-                  <span className="ml-1.5 text-[10px] text-slate-400">{s.language}</span>
-                </div>
-                <div className="text-[10px] text-slate-500 mt-0.5 flex justify-between tabular-nums">
-                  <span>{s.productCount ?? 0} Prod.</span>
-                  <span>Δ7 {formatPct(s.medianDelta7)}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
 
       {/* Produkt-Liste */}
       <section>

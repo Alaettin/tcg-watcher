@@ -11,7 +11,6 @@ import { TrendChart } from "../components/TrendChart";
 import { WatchlistEditSheet } from "../components/WatchlistEditSheet";
 import { formatEur, formatPct, MOVEMENT_LABEL_DE } from "../lib/cm";
 import type {
-  CardmarketPendantsResponse,
   CardmarketProductSignalResponse,
   CardmarketWatchlistEntry,
 } from "../lib/types";
@@ -33,15 +32,6 @@ export function CmProductPage() {
     queryFn: () =>
       api.get<CardmarketWatchlistEntry | null>(`/api/cardmarket/products/${id}/watchlist`),
     enabled: Number.isFinite(id),
-  });
-
-  const pendants = useQuery({
-    queryKey: ["cm-product-pendants", id],
-    queryFn: () =>
-      api.get<CardmarketPendantsResponse>(`/api/cardmarket/products/${id}/pendants`),
-    enabled: Number.isFinite(id),
-    // Pendants ändern sich nicht oft (Sprach-Geschwister-Sets sind statisch).
-    staleTime: 5 * 60_000,
   });
 
   if (!Number.isFinite(id)) {
@@ -183,43 +173,6 @@ export function CmProductPage() {
               </div>
             </div>
           </div>
-        </section>
-      )}
-
-      {/* Sprach-Pendants */}
-      {pendants.data && pendants.data.pendants.length > 0 && (
-        <section>
-          <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Sprach-Pendants</div>
-          <ul className="space-y-1 text-sm">
-            {pendants.data.pendants.map((p) => (
-              <li key={p.idProduct} className="flex items-center gap-2">
-                <span className="text-[10px] uppercase tracking-wide text-slate-400 w-6">{p.language}</span>
-                <Link
-                  to={`/cardmarket/p/${p.idProduct}`}
-                  className="flex-1 min-w-0 hover:underline truncate"
-                  title={p.setName ?? undefined}
-                >
-                  {p.name}
-                </Link>
-                <span className="text-xs tabular-nums">{formatEur(p.trend)}</span>
-                {p.deviationFromBase != null && (
-                  <span
-                    className="text-xs tabular-nums w-14 text-right"
-                    style={{
-                      color:
-                        Math.abs(p.deviationFromBase) < 0.05
-                          ? "rgb(100 116 139)"
-                          : p.deviationFromBase < 0
-                          ? "var(--cm-green)"
-                          : "var(--cm-red)",
-                    }}
-                  >
-                    {formatPct(p.deviationFromBase)}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
         </section>
       )}
 
