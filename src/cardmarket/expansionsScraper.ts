@@ -1,6 +1,6 @@
-import axios from "axios";
 import * as cheerio from "cheerio";
 import { logger } from "../lib/logger.js";
+import { getBrowser } from "../adapters/playwright-browser.js";
 
 export interface ScrapedExpansion {
   idExpansion: number;
@@ -13,14 +13,16 @@ const SOURCES: { url: string; label: string }[] = [
   { url: "https://www.cardmarket.com/en/Pokemon", label: "root" },
 ];
 
-const REQUEST_TIMEOUT_MS = 30_000;
-const USER_AGENT = "tcg-watcher/cardmarket-scraper (+https://github.com/Alaettin/tcg-watcher)";
+const NAV_TIMEOUT_MS = 30_000;
 const MIN_VALID_COUNT = 50;
 
 /**
- * Holt eine Liste aller Pokemon-Expansions mit `idExpansion` + Name von der
- * öffentlichen Cardmarket-Webseite. Mehrere Quellen + Selektoren als
- * Fallback, weil die HTML-Struktur sich ohne Vorwarnung ändert.
+ * Holt eine Liste aller Pokemon-Expansions von cardmarket.com.
+ *
+ * Cardmarket sitzt hinter Cloudflare und blockt einfache HTTP-Clients per
+ * 403. Wir nutzen daher den bestehenden Playwright-Stealth-Singleton aus
+ * `playwright-browser.ts` (dieselbe Pipeline wie die Shop-Adapter), holen
+ * den finalen HTML-Snapshot und parsen ihn mit cheerio.
  *
  * Liefert leeres Array bei < MIN_VALID_COUNT Funden — Caller behält dann
  * den bestehenden DB-Stand (kein Replace, nur Upsert).
@@ -28,29 +30,56 @@ const MIN_VALID_COUNT = 50;
 export async function scrapeExpansions(): Promise<ScrapedExpansion[]> {
   const log = logger.child({ scope: "cm-scrape-expansions" });
 
-  for (const source of SOURCES) {
-    try {
-      log.info({ url: source.url }, "fetching expansion list");
-      const res = await axios.get<string>(source.url, {
-        timeout: REQUEST_TIMEOUT_MS,
-        responseType: "text",
-        headers: {
-          "User-Agent": USER_AGENT,
-          "Accept": "text/html,application/xhtml+xml",
-          "Accept-Language": "en-US,en;q=0.7,de;q=0.3",
-        },
-      });
-      const found = extractExpansions(res.data);
-      log.info({ source: source.label, count: found.length }, "expansions extracted");
-      if (found.length >= MIN_VALID_COUNT) {
-        return found;
+  const browser = await getBrowser();
+  // Frischer Context pro Run — sonst akkumulieren Cookies/Storage zwischen
+  // Aufrufen und der nächste Scrape kann unerwartet anders aussehen.
+  const ctx = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+      "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    locale: "en-US",
+    viewport: { width: 1280, height: 800 },
+  });
+
+  try {
+    for (const source of SOURCES) {
+      const page = await ctx.newPage();
+      try {
+        log.info({ url: source.url }, "navigating expansion list");
+        const response = await page.goto(source.url, {
+          waitUntil: "domcontentloaded",
+          timeout: NAV_TIMEOUT_MS,
+        });
+        const status = response?.status() ?? 0;
+        if (status >= 400) {
+          log.warn({ source: source.label, status }, "scrape source returned error status");
+          continue;
+        }
+        // Kurz auf JS-Rendering warten — viele CM-Seiten füllen das
+        // Expansion-Dropdown clientseitig nach.
+        await page
+          .waitForSelector('select option, a[href*="/Expansions/"], [data-expansion-id]', {
+            timeout: 8_000,
+          })
+          .catch(() => {});
+
+        const html = await page.content();
+        const found = extractExpansions(html);
+        log.info({ source: source.label, count: found.length }, "expansions extracted");
+        if (found.length >= MIN_VALID_COUNT) {
+          return found;
+        }
+      } catch (err) {
+        log.warn(
+          { source: source.label, err: (err as Error).message },
+          "scrape source failed, trying next",
+        );
+      } finally {
+        await page.close().catch(() => {});
       }
-    } catch (err) {
-      log.warn(
-        { source: source.label, err: (err as Error).message },
-        "scrape source failed, trying next",
-      );
     }
+  } finally {
+    await ctx.close().catch(() => {});
   }
 
   log.warn({ tried: SOURCES.map((s) => s.label) }, "no source returned enough expansions");
