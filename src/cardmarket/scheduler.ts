@@ -11,6 +11,7 @@ import {
 import { importExpansions } from "./expansionsImporter.js";
 import { insertDailySnapshots, todayAsDate } from "./snapshots.js";
 import { computeAndStoreSignals } from "./computeSignals.js";
+import { triggerWatchlistAlerts } from "./watchlistAlerts.js";
 
 const QUEUE_NAME = "cardmarket-sync";
 const REPEATABLE_ID = "daily-cardmarket-sync";
@@ -61,6 +62,7 @@ export interface SyncOutcome {
   snapshotsInserted: number;
   signalsComputed: number;
   expansionsImported: number;
+  watchlistAlertsTriggered: number;
   pricesBytes?: number;
   productsBytes?: number;
 }
@@ -86,11 +88,14 @@ export async function runCardmarketSync(
     snapshotsInserted: 0,
     signalsComputed: 0,
     expansionsImported: 0,
+    watchlistAlertsTriggered: 0,
   };
 
   try {
     if (opts.signalsOnly) {
-      // Recompute-Pfad: Snapshots bleiben, nur Step 5 läuft.
+      // Recompute-Pfad: Snapshots bleiben, nur Step 5 läuft. Watchlist-
+      // Alerts werden absichtlich nicht erneut gefeuert, sonst kommen die
+      // gleichen Pushes nach jeder Schwellwert-Justierung wieder.
       const today = todayAsDate();
       outcome.signalsComputed = await computeAndStoreSignals(today);
     } else {
@@ -124,6 +129,11 @@ export async function runCardmarketSync(
       // Step 5 — Signale berechnen + Set-Kontext-MV refreshen.
       outcome.signalsComputed = await computeAndStoreSignals(today);
 
+      // Step 6 — Watchlist-Alerts (cm.md §6 + §11). Cooldown 24h pro Item
+      // wird in der Engine selbst durchgesetzt.
+      const alerts = await triggerWatchlistAlerts(today);
+      outcome.watchlistAlertsTriggered = alerts.triggered;
+
       // Singleton-Status für UI weiter pflegen.
       await recordSyncStatus({ products, prices, error: null });
     }
@@ -138,6 +148,7 @@ export async function runCardmarketSync(
         snapshotsCount: outcome.snapshotsInserted,
         signalsCount: outcome.signalsComputed,
         expansionsCount: outcome.expansionsImported,
+        watchlistAlertsCount: outcome.watchlistAlertsTriggered,
         durationMs: Date.now() - startTs,
       },
     });
@@ -158,6 +169,7 @@ export async function runCardmarketSync(
         snapshotsCount: outcome.snapshotsInserted || null,
         signalsCount: outcome.signalsComputed || null,
         expansionsCount: outcome.expansionsImported || null,
+        watchlistAlertsCount: outcome.watchlistAlertsTriggered || null,
         durationMs: Date.now() - startTs,
       },
     }).catch(() => {});

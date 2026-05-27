@@ -342,9 +342,56 @@ export interface CardmarketSyncLog {
   snapshotsCount: number | null;
   signalsCount: number | null;
   expansionsCount: number | null;
+  watchlistAlertsCount: number | null;
   status: "running" | "ok" | "failed";
   errorMsg: string | null;
   durationMs: number | null;
+}
+
+// ---- Phase 3 — Watchlist (cm.md §5) -----------------------------------------
+
+export interface CardmarketWatchlistEntry {
+  id: string;
+  idProduct: number;
+  note: string | null;
+  alertBelowTrend: number | null;
+  alertAboveTrend: number | null;
+  alertOnSignalFlip: boolean;
+  addedAt: string;
+  updatedAt: string;
+  lastAlertSentAt: string | null;
+  lastNotifiedRecommendation: CmRecommendation | null;
+}
+
+export interface CardmarketWatchlistItem extends CardmarketWatchlistEntry {
+  product: {
+    idProduct: number;
+    name: string;
+    idCategory: number;
+    categoryName: string;
+    idExpansion: number;
+  };
+  price: { trend: number | null; low: number | null; avg: number | null };
+  signal: {
+    recommendation: CmRecommendation;
+    headline: string;
+    delta7: number | null;
+    lScore: number | null;
+    mScore: number | null;
+  } | null;
+}
+
+export interface CardmarketWatchlistListResponse {
+  results: CardmarketWatchlistItem[];
+  total: number;
+}
+
+export interface CardmarketWatchlistUpsertBody {
+  idProduct: number;
+  note?: string | null;
+  alertBelowTrend?: number | null;
+  alertAboveTrend?: number | null;
+  alertOnSignalFlip?: boolean;
 }
 
 export interface CardmarketDashboardResponse {

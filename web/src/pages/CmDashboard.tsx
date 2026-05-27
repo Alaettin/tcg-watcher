@@ -1,11 +1,14 @@
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, TrendingUp, TrendingDown, Tag, ChevronRight } from "lucide-react";
+import { RefreshCw, TrendingUp, TrendingDown, Tag, ChevronRight, Star } from "lucide-react";
 import clsx from "clsx";
 import { api } from "../lib/api";
 import { HighlightCard, MoverRow } from "../components/MoverRow";
 import { Sparkline } from "../components/Sparkline";
-import type { CardmarketDashboardResponse } from "../lib/types";
+import type {
+  CardmarketDashboardResponse,
+  CardmarketWatchlistListResponse,
+} from "../lib/types";
 
 function formatRelativeFromIso(iso: string | null | undefined): string {
   if (!iso) return "nie";
@@ -32,6 +35,12 @@ export function CmDashboardPage() {
     queryKey: ["cm-dashboard"],
     queryFn: () => api.get<CardmarketDashboardResponse>("/api/cardmarket/dashboard"),
     refetchInterval: 60_000,
+  });
+
+  const watchlist = useQuery({
+    queryKey: ["cm-watchlist"],
+    queryFn: () => api.get<CardmarketWatchlistListResponse>("/api/cardmarket/watchlist"),
+    staleTime: 30_000,
   });
 
   const syncMutation = useMutation({
@@ -148,10 +157,16 @@ export function CmDashboardPage() {
       </section>
 
       {/* Block 4: Quick-Nav Tiles */}
-      <section className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <QuickNav to="/cardmarket/movers?tab=risers" icon={TrendingUp} label="Top Risers" />
         <QuickNav to="/cardmarket/movers?tab=fallers" icon={TrendingDown} label="Top Fallers" />
         <QuickNav to="/cardmarket/movers?tab=deals" icon={Tag} label="Listing-Deals" />
+        <QuickNav
+          to="/cardmarket/watchlist"
+          icon={Star}
+          label="Watchlist"
+          badge={watchlist.data?.total ?? 0}
+        />
       </section>
 
       {/* Block 5: Sync-Footer */}
@@ -183,10 +198,12 @@ function QuickNav({
   to,
   icon: Icon,
   label,
+  badge,
 }: {
   to: string;
   icon: typeof TrendingUp;
   label: string;
+  badge?: number;
 }) {
   return (
     <Link
@@ -198,6 +215,11 @@ function QuickNav({
     >
       <Icon size={20} className="text-slate-500" />
       <span className="font-medium text-sm">{label}</span>
+      {badge != null && badge > 0 && (
+        <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-semibold tabular-nums">
+          {badge}
+        </span>
+      )}
       <ChevronRight size={14} className="ml-auto text-slate-400" />
     </Link>
   );

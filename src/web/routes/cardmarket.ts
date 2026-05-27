@@ -705,6 +705,7 @@ function serializeSyncLog(log: {
   snapshotsCount: number | null;
   signalsCount: number | null;
   expansionsCount: number | null;
+  watchlistAlertsCount: number | null;
   status: string;
   errorMsg: string | null;
   durationMs: number | null;
@@ -717,6 +718,7 @@ function serializeSyncLog(log: {
     snapshotsCount: log.snapshotsCount,
     signalsCount: log.signalsCount,
     expansionsCount: log.expansionsCount,
+    watchlistAlertsCount: log.watchlistAlertsCount,
     status: log.status,
     errorMsg: log.errorMsg,
     durationMs: log.durationMs,
@@ -801,3 +803,266 @@ cardmarketRouter.post(
     }
   },
 );
+
+// ============================================================================
+// Phase 3 — Watchlist + Alerts (cm.md §5 + §11)
+// ============================================================================
+
+const WatchlistUpsertSchema = z.object({
+  idProduct: z.coerce.number().int(),
+  note: z.string().trim().max(500).optional().nullable(),
+  alertBelowTrend: z.coerce.number().positive().optional().nullable(),
+  alertAboveTrend: z.coerce.number().positive().optional().nullable(),
+  alertOnSignalFlip: z.boolean().optional(),
+});
+
+const WatchlistPatchSchema = z.object({
+  note: z.string().trim().max(500).optional().nullable(),
+  alertBelowTrend: z.coerce.number().positive().optional().nullable(),
+  alertAboveTrend: z.coerce.number().positive().optional().nullable(),
+  alertOnSignalFlip: z.boolean().optional(),
+});
+
+interface WatchlistRow {
+  id: bigint;
+  idProduct: number;
+  note: string | null;
+  alertBelowTrend: number | null;
+  alertAboveTrend: number | null;
+  alertOnSignalFlip: boolean;
+  addedAt: Date;
+  updatedAt: Date;
+  lastAlertSentAt: Date | null;
+  lastNotifiedRecommendation: string | null;
+  productName: string;
+  categoryName: string;
+  idCategory: number;
+  idExpansion: number;
+  trend: number | null;
+  low: number | null;
+  avg: number | null;
+  todayRecommendation: string | null;
+  todayHeadline: string | null;
+  todayDelta7: number | null;
+  todayLScore: number | null;
+  todayMScore: number | null;
+}
+
+function serializeWatchlistRow(row: WatchlistRow) {
+  return {
+    id: String(row.id),
+    idProduct: row.idProduct,
+    note: row.note,
+    alertBelowTrend: row.alertBelowTrend,
+    alertAboveTrend: row.alertAboveTrend,
+    alertOnSignalFlip: row.alertOnSignalFlip,
+    addedAt: row.addedAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    lastAlertSentAt: row.lastAlertSentAt ? row.lastAlertSentAt.toISOString() : null,
+    lastNotifiedRecommendation: row.lastNotifiedRecommendation,
+    product: {
+      idProduct: row.idProduct,
+      name: row.productName,
+      idCategory: row.idCategory,
+      categoryName: row.categoryName,
+      idExpansion: row.idExpansion,
+    },
+    price: {
+      trend: row.trend,
+      low: row.low,
+      avg: row.avg,
+    },
+    signal: row.todayRecommendation
+      ? {
+          recommendation: row.todayRecommendation,
+          headline: row.todayHeadline,
+          delta7: row.todayDelta7,
+          lScore: row.todayLScore,
+          mScore: row.todayMScore,
+        }
+      : null,
+  };
+}
+
+const WATCHLIST_LIST_QUERY = Prisma.sql`
+  SELECT
+    w."id",
+    w."idProduct",
+    w."note",
+    w."alertBelowTrend",
+    w."alertAboveTrend",
+    w."alertOnSignalFlip",
+    w."addedAt",
+    w."updatedAt",
+    w."lastAlertSentAt",
+    w."lastNotifiedRecommendation",
+    p."name"         AS "productName",
+    p."categoryName",
+    p."idCategory",
+    p."idExpansion",
+    pr."trend",
+    pr."low",
+    pr."avg",
+    s."recommendation" AS "todayRecommendation",
+    s."headline"       AS "todayHeadline",
+    s."delta7"         AS "todayDelta7",
+    s."lScore"         AS "todayLScore",
+    s."mScore"         AS "todayMScore"
+  FROM "CardmarketWatchlistItem" w
+  JOIN "CardmarketProduct" p ON p."idProduct" = w."idProduct"
+  LEFT JOIN "CardmarketPrice" pr ON pr."idProduct" = w."idProduct"
+  LEFT JOIN "CardmarketSignal" s ON s."idProduct" = w."idProduct"
+                                AND s."snapshotDate" = (
+                                  SELECT MAX("snapshotDate") FROM "CardmarketSignal"
+                                )
+`;
+
+cardmarketRouter.get("/cardmarket/watchlist", async (_req, res, next) => {
+  try {
+    const rows = await prisma.$queryRaw<WatchlistRow[]>`
+      ${WATCHLIST_LIST_QUERY}
+      ORDER BY w."addedAt" DESC
+    `;
+    res.json({ results: rows.map(serializeWatchlistRow), total: rows.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+cardmarketRouter.post("/cardmarket/watchlist", async (req, res, next) => {
+  try {
+    const parsed = WatchlistUpsertSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid body", issues: parsed.error.issues });
+      return;
+    }
+    const { idProduct, note, alertBelowTrend, alertAboveTrend, alertOnSignalFlip } = parsed.data;
+
+    // FK-Check: Produkt muss existieren.
+    const product = await prisma.cardmarketProduct.findUnique({ where: { idProduct } });
+    if (!product) {
+      res.status(404).json({ error: "product not found" });
+      return;
+    }
+
+    // Snapshot der HEUTIGEN Empfehlung mit anlegen, sonst feuert beim
+    // nächsten Sync der erste Sync-Run sofort einen "Flip"-Alert weil
+    // lastNotifiedRecommendation null war.
+    const todaySignal = await prisma.cardmarketSignal.findFirst({
+      where: { idProduct },
+      orderBy: { snapshotDate: "desc" },
+      select: { recommendation: true },
+    });
+
+    const item = await prisma.cardmarketWatchlistItem.upsert({
+      where: { idProduct },
+      create: {
+        idProduct,
+        note: note ?? null,
+        alertBelowTrend: alertBelowTrend ?? null,
+        alertAboveTrend: alertAboveTrend ?? null,
+        alertOnSignalFlip: alertOnSignalFlip ?? true,
+        lastNotifiedRecommendation: todaySignal?.recommendation ?? null,
+      },
+      update: {
+        note: note ?? null,
+        alertBelowTrend: alertBelowTrend ?? null,
+        alertAboveTrend: alertAboveTrend ?? null,
+        ...(alertOnSignalFlip !== undefined ? { alertOnSignalFlip } : {}),
+      },
+    });
+
+    res.json({ id: String(item.id), idProduct: item.idProduct });
+  } catch (err) {
+    next(err);
+  }
+});
+
+cardmarketRouter.patch("/cardmarket/watchlist/:idProduct", async (req, res, next) => {
+  try {
+    const id = Number(req.params.idProduct);
+    if (!Number.isInteger(id)) {
+      res.status(400).json({ error: "idProduct must be an integer" });
+      return;
+    }
+    const parsed = WatchlistPatchSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid body", issues: parsed.error.issues });
+      return;
+    }
+    const existing = await prisma.cardmarketWatchlistItem.findUnique({
+      where: { idProduct: id },
+    });
+    if (!existing) {
+      res.status(404).json({ error: "not on watchlist" });
+      return;
+    }
+    const { note, alertBelowTrend, alertAboveTrend, alertOnSignalFlip } = parsed.data;
+    const updated = await prisma.cardmarketWatchlistItem.update({
+      where: { idProduct: id },
+      data: {
+        ...(note !== undefined ? { note: note ?? null } : {}),
+        ...(alertBelowTrend !== undefined ? { alertBelowTrend: alertBelowTrend ?? null } : {}),
+        ...(alertAboveTrend !== undefined ? { alertAboveTrend: alertAboveTrend ?? null } : {}),
+        ...(alertOnSignalFlip !== undefined ? { alertOnSignalFlip } : {}),
+      },
+    });
+    res.json({ id: String(updated.id), idProduct: updated.idProduct });
+  } catch (err) {
+    next(err);
+  }
+});
+
+cardmarketRouter.delete("/cardmarket/watchlist/:idProduct", async (req, res, next) => {
+  try {
+    const id = Number(req.params.idProduct);
+    if (!Number.isInteger(id)) {
+      res.status(400).json({ error: "idProduct must be an integer" });
+      return;
+    }
+    try {
+      await prisma.cardmarketWatchlistItem.delete({ where: { idProduct: id } });
+    } catch (err) {
+      // P2025: record to delete not found — idempotent: 204 zurückgeben.
+      if ((err as { code?: string }).code === "P2025") {
+        res.status(204).end();
+        return;
+      }
+      throw err;
+    }
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+cardmarketRouter.get("/cardmarket/products/:idProduct/watchlist", async (req, res, next) => {
+  try {
+    const id = Number(req.params.idProduct);
+    if (!Number.isInteger(id)) {
+      res.status(400).json({ error: "idProduct must be an integer" });
+      return;
+    }
+    const item = await prisma.cardmarketWatchlistItem.findUnique({
+      where: { idProduct: id },
+    });
+    if (!item) {
+      res.json(null);
+      return;
+    }
+    res.json({
+      id: String(item.id),
+      idProduct: item.idProduct,
+      note: item.note,
+      alertBelowTrend: item.alertBelowTrend,
+      alertAboveTrend: item.alertAboveTrend,
+      alertOnSignalFlip: item.alertOnSignalFlip,
+      addedAt: item.addedAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString(),
+      lastAlertSentAt: item.lastAlertSentAt ? item.lastAlertSentAt.toISOString() : null,
+      lastNotifiedRecommendation: item.lastNotifiedRecommendation,
+    });
+  } catch (err) {
+    next(err);
+  }
+});

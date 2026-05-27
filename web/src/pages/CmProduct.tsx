@@ -1,22 +1,33 @@
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ExternalLink, Star } from "lucide-react";
+import clsx from "clsx";
 import { api } from "../lib/api";
 import { SignalHeadlinePill } from "../components/SignalBadge";
 import { SignalCard } from "../components/SignalCard";
 import { ReasoningList } from "../components/ReasoningList";
 import { TrendChart } from "../components/TrendChart";
+import { WatchlistEditSheet } from "../components/WatchlistEditSheet";
 import { formatEur, formatPct, MOVEMENT_LABEL_DE } from "../lib/cm";
-import type { CardmarketProductSignalResponse } from "../lib/types";
+import type { CardmarketProductSignalResponse, CardmarketWatchlistEntry } from "../lib/types";
 
 export function CmProductPage() {
   const { idProduct } = useParams<{ idProduct: string }>();
   const id = Number(idProduct);
+  const [watchlistSheetOpen, setWatchlistSheetOpen] = useState(false);
 
   const product = useQuery({
     queryKey: ["cm-product-signal", id],
     queryFn: () =>
       api.get<CardmarketProductSignalResponse>(`/api/cardmarket/products/${id}/signal`),
+    enabled: Number.isFinite(id),
+  });
+
+  const watchlistEntry = useQuery({
+    queryKey: ["cm-product-watchlist", id],
+    queryFn: () =>
+      api.get<CardmarketWatchlistEntry | null>(`/api/cardmarket/products/${id}/watchlist`),
     enabled: Number.isFinite(id),
   });
 
@@ -54,11 +65,17 @@ export function CmProductPage() {
             <ChevronLeft size={12} /> Dashboard
           </Link>
           <button
-            disabled
-            title="Watchlist kommt in Phase 3"
-            className="text-xs text-slate-400 inline-flex items-center gap-1 cursor-not-allowed"
+            onClick={() => setWatchlistSheetOpen(true)}
+            className={clsx(
+              "text-xs inline-flex items-center gap-1 rounded px-2 py-1",
+              watchlistEntry.data
+                ? "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800",
+            )}
+            title={watchlistEntry.data ? "Auf Watchlist — bearbeiten" : "Zur Watchlist hinzufügen"}
           >
-            <Star size={12} /> Watchlist
+            <Star size={12} fill={watchlistEntry.data ? "currentColor" : "none"} />
+            {watchlistEntry.data ? "Auf Watchlist" : "Zur Watchlist"}
           </button>
         </div>
         <h1 className="text-lg font-semibold mt-1 leading-snug">{p.name}</h1>
@@ -158,6 +175,16 @@ export function CmProductPage() {
       >
         <ExternalLink size={14} /> Auf cardmarket.com öffnen
       </a>
+
+      {watchlistSheetOpen && (
+        <WatchlistEditSheet
+          idProduct={id}
+          productName={p.name}
+          existing={watchlistEntry.data ?? null}
+          onClose={() => setWatchlistSheetOpen(false)}
+          onSaved={() => setWatchlistSheetOpen(false)}
+        />
+      )}
     </div>
   );
 }

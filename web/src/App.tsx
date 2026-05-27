@@ -9,6 +9,7 @@ import { CardmarketPage } from "./pages/Cardmarket";
 import { CmDashboardPage } from "./pages/CmDashboard";
 import { CmMoversPage } from "./pages/CmMovers";
 import { CmProductPage } from "./pages/CmProduct";
+import { CmWatchlistPage } from "./pages/CmWatchlist";
 import { EventsPage } from "./pages/Events";
 import { SettingsPage } from "./pages/Settings";
 
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/cardmarket" element={<CmDashboardPage />} />
           <Route path="/cardmarket/products" element={<CardmarketPage />} />
           <Route path="/cardmarket/movers" element={<CmMoversPage />} />
+          <Route path="/cardmarket/watchlist" element={<CmWatchlistPage />} />
           <Route path="/cardmarket/p/:idProduct" element={<CmProductPage />} />
           <Route path="/events" element={<EventsPage />} />
           <Route path="/settings" element={<SettingsPage />} />

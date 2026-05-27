@@ -238,6 +238,7 @@ model CardmarketProduct {
   price        CardmarketPrice?
   snapshots    CardmarketPriceSnapshot[]
   signals      CardmarketSignal[]
+  watchlistItem CardmarketWatchlistItem?
 
   @@index([idCategory])
   @@index([idExpansion])
@@ -347,16 +348,39 @@ model CardmarketExpansion {
 // History der Sync-Runs (cm.md §6 Step 7). CardmarketSyncStatus bleibt das
 // Singleton für die UI-Anzeige; dieser Log ist die volle Run-Historie.
 model CardmarketSyncLog {
-  id             BigInt    @id @default(autoincrement())
-  startedAt      DateTime
-  finishedAt     DateTime?
-  productsCount  Int?
-  snapshotsCount Int?
-  signalsCount   Int?
-  expansionsCount Int?
-  status         String    // running | ok | failed
-  errorMsg       String?
-  durationMs     Int?
+  id                    BigInt    @id @default(autoincrement())
+  startedAt             DateTime
+  finishedAt            DateTime?
+  productsCount         Int?
+  snapshotsCount        Int?
+  signalsCount          Int?
+  expansionsCount       Int?
+  watchlistAlertsCount  Int?
+  status                String    // running | ok | failed
+  errorMsg              String?
+  durationMs            Int?
 
   @@index([startedAt(sort: Desc)])
+}
+
+// Single-User-Watchlist (cm.md §5, Phase 3). Schwellwert-Alerts auf trend
+// und Signal-Flip-Alerts. 24h-Cooldown via lastAlertSentAt — vermeidet
+// Push-Spam falls trend tagelang unter Schwelle bleibt.
+model CardmarketWatchlistItem {
+  id                          BigInt   @id @default(autoincrement())
+  idProduct                   Int      @unique
+  product                     CardmarketProduct @relation(fields: [idProduct], references: [idProduct], onDelete: Cascade)
+  note                        String?
+  alertBelowTrend             Float?
+  alertAboveTrend             Float?
+  alertOnSignalFlip           Boolean  @default(true)
+  lastAlertSentAt             DateTime?
+  // Snapshot der zuletzt PER ALERT GEMELDETEN Empfehlung. Erlaubt Flip-
+  // Detection ohne zweiten Signal-Query und ohne in der Engine eine
+  // Zustands-Tabelle zu führen.
+  lastNotifiedRecommendation  String?
+  addedAt                     DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  @@index([addedAt(sort: Desc)])
 }
