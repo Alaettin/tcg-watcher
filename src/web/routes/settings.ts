@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import {
   DEFAULT_NTFY_CONFIG,
+  NTFY_CATEGORIES,
   SETTING_KEYS,
   getAllSettings,
   getNtfyConfig,
@@ -25,6 +26,9 @@ const NtfyChannelSchema = z.object({
     .max(120)
     .regex(/^[a-zA-Z0-9_-]+$/, "only letters/digits/_/-"),
   enabled: z.boolean(),
+  // Optional, leeres Array = Channel kriegt nichts. Fehlt das Feld komplett,
+  // verhält sich der Channel wie vor Phase 3.1: alle Kategorien aktiv.
+  categories: z.array(z.enum(NTFY_CATEGORIES)).optional(),
 });
 
 const NtfyConfigSchema = z.object({

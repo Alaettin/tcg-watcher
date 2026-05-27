@@ -79,13 +79,16 @@ async function notifyOne(ev: DetectedOfflineEvent): Promise<void> {
     lines.push(`PLZ-Region: ${ev.deal.postalCode}`);
   }
 
-  await sendNtfyRaw({
-    title,
-    message: lines.join("\n"),
-    priority: PRIORITY[ev.type],
-    tags: TAGS[ev.type],
-    click: ev.deal.sourceUrl ?? undefined,
-  });
+  await sendNtfyRaw(
+    {
+      title,
+      message: lines.join("\n"),
+      priority: PRIORITY[ev.type],
+      tags: TAGS[ev.type],
+      click: ev.deal.sourceUrl ?? undefined,
+    },
+    "offline",
+  );
 
   await prisma.offlineEvent.updateMany({
     where: {

@@ -213,10 +213,13 @@ export async function sendDailyHeartbeat(): Promise<void> {
 
   logger.info({ shops: snap.enabledCount, events24h: snap.totalEvents24h }, "heartbeat sent");
 
-  await sendNtfyRaw({
-    title: "Pokemon Watcher — Heartbeat",
-    message,
-    priority: 2,
-    tags: ["heartbeat"],
-  });
+  await sendNtfyRaw(
+    {
+      title: "Pokemon Watcher — Heartbeat",
+      message,
+      priority: 2,
+      tags: ["heartbeat"],
+    },
+    "system",
+  );
 }

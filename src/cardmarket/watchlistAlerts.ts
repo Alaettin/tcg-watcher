@@ -188,14 +188,17 @@ async function sendCardmarketAlert(args: {
       break;
   }
 
-  await sendNtfyRaw({
-    title,
-    message,
-    priority,
-    tags,
-    click: productUrl,
-    actions: [
-      { action: "view", label: "Produkt öffnen", url: productUrl, clear: true },
-    ],
-  });
+  await sendNtfyRaw(
+    {
+      title,
+      message,
+      priority,
+      tags,
+      click: productUrl,
+      actions: [
+        { action: "view", label: "Produkt öffnen", url: productUrl, clear: true },
+      ],
+    },
+    "cardmarket",
+  );
 }

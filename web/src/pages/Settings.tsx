@@ -4,11 +4,23 @@ import { Save, RotateCcw, Plus, Trash2, Send, RefreshCw } from "lucide-react";
 import clsx from "clsx";
 import { api } from "../lib/api";
 
+const NTFY_CATEGORIES = ["shop", "offline", "cardmarket", "system"] as const;
+type NtfyCategory = (typeof NTFY_CATEGORIES)[number];
+
+const CATEGORY_LABELS: Record<NtfyCategory, { title: string; subtitle: string }> = {
+  shop:       { title: "Online-Shops",      subtitle: "Neu/Restock/Preisdrop/Resale" },
+  offline:    { title: "Offline-Prospekte", subtitle: "Marktguru/Bonial" },
+  cardmarket: { title: "Cardmarket",        subtitle: "Watchlist-Alerts" },
+  system:     { title: "System",            subtitle: "Heartbeat" },
+};
+
 interface NtfyChannel {
   id: string;
   name: string;
   topic: string;
   enabled: boolean;
+  // undefined = Backward-Compat (alle Kategorien); [] = stumm; sonst nur die genannten.
+  categories?: NtfyCategory[];
 }
 
 interface NtfyConfig {
@@ -210,7 +222,15 @@ function NtfySection() {
       ...d,
       channels: [
         ...d.channels,
-        { id: randomChannelId(), name: "", topic: randomTopic(), enabled: true },
+        {
+          id: randomChannelId(),
+          name: "",
+          topic: randomTopic(),
+          enabled: true,
+          // Neue Channels starten mit allen Kategorien explizit aktiv —
+          // selbsterklärender als das implizite "undefined = alle".
+          categories: [...NTFY_CATEGORIES],
+        },
       ],
     }));
     setDirty(true);
@@ -234,7 +254,10 @@ function NtfySection() {
         <div>
           <h2 className="font-semibold">Push Channels (ntfy.sh)</h2>
           <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-xl">
-            Jedes Event (NEW/RESTOCK/PRICE_DROP/OOS + Heartbeat) wird parallel an alle aktiven Channels gesendet. Lege z.B. einen Channel für dein Handy an und einen weiteren um Pushes mit Freunden zu teilen.
+            Push-Events werden an aktive Channels gesendet. Pro Channel kannst
+            du auswählen, welche Event-Arten (Shops, Prospekte, Cardmarket,
+            System) du empfangen willst. Lege z.B. einen Channel für dein
+            Handy an und einen weiteren mit anderem Filter zum Teilen.
           </p>
         </div>
         <div className="text-xs text-slate-500 shrink-0">{activeCount} aktiv</div>
@@ -416,6 +439,13 @@ function ChannelRow({
           </button>
         </div>
       </div>
+
+      {/* Kategorie-Filter — pro Channel auswählen, welche Event-Arten ankommen. */}
+      <ChannelCategoryFilter
+        selected={channel.categories}
+        onChange={(categories) => onChange({ categories })}
+      />
+
       {testState === "ok" && (
         <div className="mt-1.5 text-xs text-emerald-700 dark:text-emerald-400">
           ✓ Test-Push gesendet — Check die ntfy-App.
@@ -426,6 +456,93 @@ function ChannelRow({
       )}
       {testState === "fail" && (
         <div className="mt-1.5 text-xs text-rose-700 dark:text-rose-400">✗ {testError}</div>
+      )}
+    </div>
+  );
+}
+
+function ChannelCategoryFilter({
+  selected,
+  onChange,
+}: {
+  selected: NtfyCategory[] | undefined;
+  onChange: (next: NtfyCategory[]) => void;
+}) {
+  // Alte Channels haben `undefined` → effektiv „alle aktiv". UI rendert das
+  // mit allen Checkboxen gehakt. Erste Interaktion materialisiert die Liste.
+  const effective: NtfyCategory[] = selected ?? [...NTFY_CATEGORIES];
+  const isAll = effective.length === NTFY_CATEGORIES.length;
+  const isNone = effective.length === 0;
+
+  const toggle = (cat: NtfyCategory) => {
+    if (effective.includes(cat)) {
+      onChange(effective.filter((c) => c !== cat));
+    } else {
+      // Im Reihenfolge-Sinn der Kategorien sortiert halten — kosmetisch, hilft beim Diff.
+      const set = new Set([...effective, cat]);
+      onChange(NTFY_CATEGORIES.filter((c) => set.has(c)));
+    }
+  };
+
+  return (
+    <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[11px] uppercase tracking-wide text-slate-500">
+          Welche Events?
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onChange([...NTFY_CATEGORIES])}
+            disabled={isAll}
+            className="text-[10px] px-1.5 py-0.5 rounded text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
+          >
+            alle
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange([])}
+            disabled={isNone}
+            className="text-[10px] px-1.5 py-0.5 rounded text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
+          >
+            keine
+          </button>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        {NTFY_CATEGORIES.map((cat) => {
+          const checked = effective.includes(cat);
+          const meta = CATEGORY_LABELS[cat];
+          return (
+            <label
+              key={cat}
+              className={clsx(
+                "flex items-start gap-2 px-2 py-1.5 rounded border cursor-pointer text-xs",
+                checked
+                  ? "border-emerald-300 bg-emerald-50/60 dark:border-emerald-800/50 dark:bg-emerald-900/10"
+                  : "border-slate-200 dark:border-slate-700",
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => toggle(cat)}
+                className="h-3.5 w-3.5 mt-0.5 shrink-0"
+              />
+              <div className="min-w-0">
+                <div className="font-medium leading-tight">{meta.title}</div>
+                <div className="text-[10px] text-slate-500 leading-tight truncate">
+                  {meta.subtitle}
+                </div>
+              </div>
+            </label>
+          );
+        })}
+      </div>
+      {isNone && (
+        <div className="mt-2 text-[10px] text-amber-700 dark:text-amber-400">
+          Keine Kategorie aktiv — dieser Channel kriegt aktuell nichts.
+        </div>
       )}
     </div>
   );

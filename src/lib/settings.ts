@@ -17,11 +17,27 @@ export const SETTING_KEYS = {
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
 
+/**
+ * Event-Kategorien für Per-Channel-Filterung. Pro Push-Quelle eine Kategorie,
+ * nicht pro EventType — das hält die UI auf 4 Checkboxen und vermeidet
+ * Namens-Konflikte (z.B. PRICE_DROP gibt es sowohl in Shop- als auch in
+ * Offline-Events).
+ */
+export const NTFY_CATEGORIES = ["shop", "offline", "cardmarket", "system"] as const;
+export type NtfyCategory = (typeof NTFY_CATEGORIES)[number];
+
 export interface NtfyChannel {
   id: string;
   name: string;
   topic: string;
   enabled: boolean;
+  /**
+   * Welche Event-Kategorien an diesen Channel gepusht werden.
+   * `undefined` = Feld existiert nicht (alte Channels vor Phase 3.1) → alle Kategorien erlaubt (Backward-Compat).
+   * `[]` = leer → keine Kategorie erlaubt (Mute, ohne `enabled` umzustellen).
+   * `["shop", "cardmarket"]` = nur Shop- und Cardmarket-Events.
+   */
+  categories?: NtfyCategory[];
 }
 
 export interface NtfyConfig {

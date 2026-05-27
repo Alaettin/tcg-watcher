@@ -1,7 +1,12 @@
 import axios from "axios";
 import { EventType } from "@prisma/client";
 import { logger } from "../lib/logger.js";
-import { getNtfyConfig, type NtfyChannel, type NtfyConfig } from "../lib/settings.js";
+import {
+  getNtfyConfig,
+  type NtfyCategory,
+  type NtfyChannel,
+  type NtfyConfig,
+} from "../lib/settings.js";
 import type { DetectedEvent } from "../detector/eventDetector.js";
 
 const TIMEOUT_MS = 5_000;
@@ -37,6 +42,19 @@ function formatEur(value: number): string {
 
 function activeChannels(cfg: NtfyConfig): NtfyChannel[] {
   return cfg.channels.filter((c) => c.enabled && c.topic.trim().length > 0);
+}
+
+/**
+ * Filtert Channels nach Event-Kategorie:
+ * - `undefined` als Kategorie (uneingeordneter Push) → an alle aktiven Channels
+ * - Channel.categories `undefined` (Backward-Compat für Channels vor 3.1) → alle erlaubt
+ * - Channel.categories `[]` → Channel ist gemutet, kriegt nichts
+ * - Sonst: nur wenn die Kategorie in der Liste steht
+ */
+function channelAcceptsCategory(channel: NtfyChannel, category: NtfyCategory | undefined): boolean {
+  if (!category) return true;
+  if (channel.categories === undefined) return true;
+  return channel.categories.includes(category);
 }
 
 export async function ntfyEnabled(): Promise<boolean> {
@@ -96,9 +114,12 @@ async function postToChannel(
   }
 }
 
-export async function sendNtfyRaw(payload: RawPushPayload): Promise<void> {
+export async function sendNtfyRaw(
+  payload: RawPushPayload,
+  category?: NtfyCategory,
+): Promise<void> {
   const cfg = await getNtfyConfig();
-  const channels = activeChannels(cfg);
+  const channels = activeChannels(cfg).filter((c) => channelAcceptsCategory(c, category));
   if (channels.length === 0) return;
   await Promise.allSettled(channels.map((c) => postToChannel(cfg.server, c, payload)));
 }
@@ -118,21 +139,24 @@ export async function sendNtfy(event: DetectedEvent): Promise<void> {
     ? `${event.setName} (${event.variantKind})`
     : event.setName;
 
-  await sendNtfyRaw({
-    title: `${TITLES[event.type]} — ${setLabel} @ ${event.shopId}`,
-    message: lines.join("\n"),
-    priority: PRIORITY[event.type],
-    tags: TAGS[event.type].split(","),
-    click: event.url,
-    actions: [
-      {
-        action: "view",
-        label: "Zum Shop",
-        url: event.url,
-        clear: true,
-      },
-    ],
-  });
+  await sendNtfyRaw(
+    {
+      title: `${TITLES[event.type]} — ${setLabel} @ ${event.shopId}`,
+      message: lines.join("\n"),
+      priority: PRIORITY[event.type],
+      tags: TAGS[event.type].split(","),
+      click: event.url,
+      actions: [
+        {
+          action: "view",
+          label: "Zum Shop",
+          url: event.url,
+          clear: true,
+        },
+      ],
+    },
+    "shop",
+  );
 }
 
 export async function sendTestPush(server: string, topic: string): Promise<{ ok: boolean; error?: string }> {
