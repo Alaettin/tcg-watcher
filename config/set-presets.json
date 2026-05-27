@@ -388,6 +388,30 @@
     ]
   },
   {
+    "id": "kp12-erhabene-helden",
+    "name": "Erhabene Helden",
+    "shortCode": "KP12",
+    "description": "Dritte Mega-Evolution-Welle mit Mega-Dragonite, Mega-Emboar ex, Mega-Feraligatr ex, Mega-Gardevoir, Mega-Lucario und Mega-Meganium ex.",
+    "releaseDate": null,
+    "language": "DE",
+    "era": "Karmesin & Purpur",
+    "searchTerms": [
+      "Erhabene Helden",
+      "Ascended Heroes",
+      "KP12"
+    ],
+    "negativeTerms": ["Sleeve", "Einzelkarte", "Sticker", "leer"],
+    "variants": [
+      { "kind": "display", "displayName": "Booster Display 36", "uvpEur": 159.99 },
+      { "kind": "etb", "displayName": "Top Trainer Box", "uvpEur": 54.99 },
+      { "kind": "booster-bundle", "displayName": "Booster Bundle", "uvpEur": 24.99 },
+      { "kind": "booster", "displayName": "Einzelbooster", "uvpEur": 4.99 },
+      { "kind": "premium-collection", "displayName": "Mega-Dragonite ex Premium-Box", "uvpEur": 59.99 },
+      { "kind": "premium-collection", "displayName": "Mega-Gardevoir Premium Poster Collection", "uvpEur": 39.99 },
+      { "kind": "premium-collection", "displayName": "Mega-Lucario Premium Poster Collection", "uvpEur": 39.99 }
+    ]
+  },
+  {
     "id": "30th-anniversary",
     "name": "Pokemon 30th Anniversary",
     "shortCode": "30TH",
