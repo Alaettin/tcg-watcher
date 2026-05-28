@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ExternalLink, Star } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronLeft, ExternalLink, Star, EyeOff, Eye } from "lucide-react";
 import clsx from "clsx";
 import { api } from "../lib/api";
 import { SignalHeadlinePill } from "../components/SignalBadge";
@@ -18,6 +18,7 @@ import type {
 export function CmProductPage() {
   const { idProduct } = useParams<{ idProduct: string }>();
   const id = Number(idProduct);
+  const qc = useQueryClient();
   const [watchlistSheetOpen, setWatchlistSheetOpen] = useState(false);
 
   const product = useQuery({
@@ -32,6 +33,21 @@ export function CmProductPage() {
     queryFn: () =>
       api.get<CardmarketWatchlistEntry | null>(`/api/cardmarket/products/${id}/watchlist`),
     enabled: Number.isFinite(id),
+  });
+
+  const isBlacklisted = product.data?.blacklisted ?? false;
+  const toggleBlacklist = useMutation({
+    mutationFn: async () => {
+      if (isBlacklisted) {
+        await api.delete<void>(`/api/cardmarket/products/${id}/blacklist`);
+      } else {
+        await api.post<{ idProduct: number }>(`/api/cardmarket/products/${id}/blacklist`);
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cm-product-signal", id] });
+      qc.invalidateQueries({ queryKey: ["cm-blacklist"] });
+    },
   });
 
   if (!Number.isFinite(id)) {
@@ -67,19 +83,39 @@ export function CmProductPage() {
           >
             <ChevronLeft size={12} /> Dashboard
           </Link>
-          <button
-            onClick={() => setWatchlistSheetOpen(true)}
-            className={clsx(
-              "text-xs inline-flex items-center gap-1 rounded px-2 py-1",
-              watchlistEntry.data
-                ? "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"
-                : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800",
-            )}
-            title={watchlistEntry.data ? "Auf Watchlist — bearbeiten" : "Zur Watchlist hinzufügen"}
-          >
-            <Star size={12} fill={watchlistEntry.data ? "currentColor" : "none"} />
-            {watchlistEntry.data ? "Auf Watchlist" : "Zur Watchlist"}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => toggleBlacklist.mutate()}
+              disabled={toggleBlacklist.isPending}
+              className={clsx(
+                "text-xs inline-flex items-center gap-1 rounded px-2 py-1 disabled:opacity-50",
+                isBlacklisted
+                  ? "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800",
+              )}
+              title={
+                isBlacklisted
+                  ? "Wieder einblenden — Artikel erscheint wieder in den Listen"
+                  : "Ausblenden — Artikel verschwindet aus allen Listen (Werte werden weiter gesammelt)"
+              }
+            >
+              {isBlacklisted ? <Eye size={12} /> : <EyeOff size={12} />}
+              {isBlacklisted ? "Eingeblendet lassen" : "Ausblenden"}
+            </button>
+            <button
+              onClick={() => setWatchlistSheetOpen(true)}
+              className={clsx(
+                "text-xs inline-flex items-center gap-1 rounded px-2 py-1",
+                watchlistEntry.data
+                  ? "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                  : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800",
+              )}
+              title={watchlistEntry.data ? "Auf Watchlist — bearbeiten" : "Zur Watchlist hinzufügen"}
+            >
+              <Star size={12} fill={watchlistEntry.data ? "currentColor" : "none"} />
+              {watchlistEntry.data ? "Auf Watchlist" : "Zur Watchlist"}
+            </button>
+          </div>
         </div>
         <h1 className="text-lg font-semibold mt-1 leading-snug">{p.name}</h1>
         <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-2">

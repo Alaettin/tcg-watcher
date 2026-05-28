@@ -203,6 +203,9 @@ export function CmDashboardPage() {
         {data?.lastSyncLog?.durationMs != null && (
           <span>· Dauer {(data.lastSyncLog.durationMs / 1000).toFixed(0)}s</span>
         )}
+        <Link to="/cardmarket/blacklist" className="ml-auto hover:underline">
+          Blacklist
+        </Link>
       </footer>
     </div>
   );

@@ -327,6 +327,7 @@ export interface CardmarketProductSignalResponse {
   product: CardmarketProduct;
   signal: CardmarketSignalDetail | null;
   setContext: CardmarketSetContext | null;
+  blacklisted: boolean;
 }
 
 export interface CardmarketSetSignalResponse {
@@ -383,6 +384,34 @@ export interface CardmarketWatchlistItem extends CardmarketWatchlistEntry {
 
 export interface CardmarketWatchlistListResponse {
   results: CardmarketWatchlistItem[];
+  total: number;
+}
+
+// ---- Blacklist (ausgeblendete Artikel) --------------------------------------
+
+export interface CardmarketBlacklistItem {
+  id: string;
+  idProduct: number;
+  addedAt: string;
+  product: {
+    idProduct: number;
+    name: string;
+    idCategory: number;
+    categoryName: string;
+    idExpansion: number;
+  };
+  price: { trend: number | null; low: number | null; avg: number | null };
+  signal: {
+    recommendation: CmRecommendation;
+    headline: string;
+    delta7: number | null;
+    lScore: number | null;
+    mScore: number | null;
+  } | null;
+}
+
+export interface CardmarketBlacklistListResponse {
+  results: CardmarketBlacklistItem[];
   total: number;
 }
 

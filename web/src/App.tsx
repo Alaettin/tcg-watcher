@@ -12,6 +12,7 @@ import { CmProductPage } from "./pages/CmProduct";
 import { CmWatchlistPage } from "./pages/CmWatchlist";
 import { CmSetsPage } from "./pages/CmSets";
 import { CmSetPage } from "./pages/CmSet";
+import { CmBlacklistPage } from "./pages/CmBlacklist";
 import { EventsPage } from "./pages/Events";
 import { SettingsPage } from "./pages/Settings";
 
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/cardmarket/watchlist" element={<CmWatchlistPage />} />
           <Route path="/cardmarket/sets" element={<CmSetsPage />} />
           <Route path="/cardmarket/sets/:idExpansion" element={<CmSetPage />} />
+          <Route path="/cardmarket/blacklist" element={<CmBlacklistPage />} />
           <Route path="/cardmarket/p/:idProduct" element={<CmProductPage />} />
           <Route path="/events" element={<EventsPage />} />
           <Route path="/settings" element={<SettingsPage />} />

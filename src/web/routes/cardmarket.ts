@@ -15,6 +15,11 @@ import { runExpansionsScrape } from "../../cardmarket/expansionsImporter.js";
 
 export const cardmarketRouter = Router();
 
+// Wiederverwendbare SQL-Klausel: schließt geblacklistete Produkte aus
+// Artikel-Listen aus. Setzt voraus, dass die Query "CardmarketProduct" als
+// Alias `p` joint. Wird per AND an die jeweilige WHERE-Klausel gehängt.
+const NOT_BLACKLISTED = Prisma.sql`p."idProduct" NOT IN (SELECT "idProduct" FROM "CardmarketBlacklistItem")`;
+
 const ListQuerySchema = z.object({
   q: z.string().trim().min(1).max(120).optional(),
   category: z.coerce.number().int().optional(),
@@ -34,7 +39,8 @@ cardmarketRouter.get("/cardmarket/products", async (req, res, next) => {
     }
     const { q, category, expansion, sort, order, offset, limit } = parsed.data;
 
-    const where: Prisma.CardmarketProductWhereInput = {};
+    // is: null auf einer 1-1-Relation = Produkte ohne Blacklist-Eintrag.
+    const where: Prisma.CardmarketProductWhereInput = { blacklistItem: { is: null } };
     if (q) where.name = { contains: q, mode: "insensitive" };
     if (category) where.idCategory = category;
     if (expansion) where.idExpansion = expansion;
@@ -189,7 +195,10 @@ cardmarketRouter.get("/cardmarket/signals/today", async (req, res, next) => {
     };
     const orderSql = order === "asc" ? Prisma.sql`ASC NULLS LAST` : Prisma.sql`DESC NULLS LAST`;
 
-    const filters: Prisma.Sql[] = [Prisma.sql`s."snapshotDate" = ${latest}::date`];
+    const filters: Prisma.Sql[] = [
+      Prisma.sql`s."snapshotDate" = ${latest}::date`,
+      NOT_BLACKLISTED,
+    ];
     if (recommendation) filters.push(Prisma.sql`s."recommendation" = ${recommendation}`);
     if (category) filters.push(Prisma.sql`p."idCategory" = ${category}`);
     if (expansion) filters.push(Prisma.sql`p."idExpansion" = ${expansion}`);
@@ -311,6 +320,7 @@ cardmarketRouter.get("/cardmarket/movers", async (req, res, next) => {
     const baseFilters: Prisma.Sql[] = [
       Prisma.sql`s."snapshotDate" = ${latest}::date`,
       Prisma.sql`s."sampleQuality" >= ${minQuality}`,
+      NOT_BLACKLISTED,
     ];
     if (category) baseFilters.push(Prisma.sql`p."idCategory" = ${category}`);
     if (expansion) baseFilters.push(Prisma.sql`p."idExpansion" = ${expansion}`);
@@ -384,7 +394,7 @@ cardmarketRouter.get("/cardmarket/products/:idProduct/signal", async (req, res, 
       res.status(400).json({ error: "idProduct must be an integer" });
       return;
     }
-    const [product, signal, expansion] = await Promise.all([
+    const [product, signal, expansion, blacklistEntry] = await Promise.all([
       prisma.cardmarketProduct.findUnique({
         where: { idProduct: id },
         include: { price: true },
@@ -421,6 +431,7 @@ cardmarketRouter.get("/cardmarket/products/:idProduct/signal", async (req, res, 
         ORDER BY mv."snapshotDate" DESC
         LIMIT 1
       `,
+      prisma.cardmarketBlacklistItem.findUnique({ where: { idProduct: id } }),
     ]);
 
     if (!product) {
@@ -437,6 +448,7 @@ cardmarketRouter.get("/cardmarket/products/:idProduct/signal", async (req, res, 
           }
         : null,
       setContext: expansion[0] ?? null,
+      blacklisted: blacklistEntry != null,
     });
   } catch (err) {
     next(err);
@@ -663,6 +675,7 @@ cardmarketRouter.get("/cardmarket/sets/:idExpansion/signal", async (req, res, ne
         LEFT JOIN "CardmarketPrice" pr ON pr."idProduct" = s."idProduct"
         WHERE p."idExpansion" = ${id}
           AND s."snapshotDate" = (SELECT MAX("snapshotDate") FROM "CardmarketSignal")
+          AND ${NOT_BLACKLISTED}
         ORDER BY s."delta7" DESC NULLS LAST
       `,
       prisma.$queryRaw<{ greenCount: number; amberCount: number; redCount: number; neutralCount: number }[]>`
@@ -818,6 +831,7 @@ cardmarketRouter.get("/cardmarket/dashboard", async (_req, res, next) => {
         WHERE s."snapshotDate" = ${latest}::date
           AND s."sampleQuality" >= 0.5
           AND s."delta7" IS NOT NULL
+          AND ${NOT_BLACKLISTED}
         ORDER BY s."delta7" DESC
         LIMIT 1
       `,
@@ -833,6 +847,7 @@ cardmarketRouter.get("/cardmarket/dashboard", async (_req, res, next) => {
         WHERE s."snapshotDate" = ${latest}::date
           AND s."sampleQuality" >= 0.5
           AND s."delta7" IS NOT NULL
+          AND ${NOT_BLACKLISTED}
         ORDER BY s."delta7" ASC
         LIMIT 1
       `,
@@ -850,6 +865,7 @@ cardmarketRouter.get("/cardmarket/dashboard", async (_req, res, next) => {
           AND s."mScore" IS NOT NULL
           AND s."mScore" > 0.15
           AND s."mScore" <= 0.60
+          AND ${NOT_BLACKLISTED}
         ORDER BY s."mScore" DESC
         LIMIT 1
       `,
@@ -868,6 +884,7 @@ cardmarketRouter.get("/cardmarket/dashboard", async (_req, res, next) => {
       WHERE s."snapshotDate" = ${latest}::date
         AND s."recommendation" = 'GREEN'
         AND s."sampleQuality" >= 0.5
+        AND ${NOT_BLACKLISTED}
       ORDER BY s."sampleQuality" DESC, COALESCE(s."mScore", 0) DESC
       LIMIT 5
     `;
@@ -1287,6 +1304,132 @@ cardmarketRouter.get("/cardmarket/products/:idProduct/watchlist", async (req, re
       lastAlertSentAt: item.lastAlertSentAt ? item.lastAlertSentAt.toISOString() : null,
       lastNotifiedRecommendation: item.lastNotifiedRecommendation,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ============================================================================
+// Blacklist — ausgeblendete Artikel (verschwinden aus allen Artikel-Listen)
+// ============================================================================
+
+interface BlacklistRow {
+  id: bigint;
+  idProduct: number;
+  addedAt: Date;
+  productName: string;
+  categoryName: string;
+  idCategory: number;
+  idExpansion: number;
+  trend: number | null;
+  low: number | null;
+  avg: number | null;
+  todayRecommendation: string | null;
+  todayHeadline: string | null;
+  todayDelta7: number | null;
+  todayLScore: number | null;
+  todayMScore: number | null;
+}
+
+function serializeBlacklistRow(row: BlacklistRow) {
+  return {
+    id: String(row.id),
+    idProduct: row.idProduct,
+    addedAt: row.addedAt.toISOString(),
+    product: {
+      idProduct: row.idProduct,
+      name: row.productName,
+      idCategory: row.idCategory,
+      categoryName: row.categoryName,
+      idExpansion: row.idExpansion,
+    },
+    price: { trend: row.trend, low: row.low, avg: row.avg },
+    signal: row.todayRecommendation
+      ? {
+          recommendation: row.todayRecommendation,
+          headline: row.todayHeadline,
+          delta7: row.todayDelta7,
+          lScore: row.todayLScore,
+          mScore: row.todayMScore,
+        }
+      : null,
+  };
+}
+
+cardmarketRouter.get("/cardmarket/blacklist", async (_req, res, next) => {
+  try {
+    const rows = await prisma.$queryRaw<BlacklistRow[]>`
+      SELECT
+        b."id",
+        b."idProduct",
+        b."addedAt",
+        p."name"         AS "productName",
+        p."categoryName",
+        p."idCategory",
+        p."idExpansion",
+        pr."trend",
+        pr."low",
+        pr."avg",
+        s."recommendation" AS "todayRecommendation",
+        s."headline"       AS "todayHeadline",
+        s."delta7"         AS "todayDelta7",
+        s."lScore"         AS "todayLScore",
+        s."mScore"         AS "todayMScore"
+      FROM "CardmarketBlacklistItem" b
+      JOIN "CardmarketProduct" p ON p."idProduct" = b."idProduct"
+      LEFT JOIN "CardmarketPrice" pr ON pr."idProduct" = b."idProduct"
+      LEFT JOIN "CardmarketSignal" s ON s."idProduct" = b."idProduct"
+                                    AND s."snapshotDate" = (
+                                      SELECT MAX("snapshotDate") FROM "CardmarketSignal"
+                                    )
+      ORDER BY b."addedAt" DESC
+    `;
+    res.json({ results: rows.map(serializeBlacklistRow), total: rows.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+cardmarketRouter.post("/cardmarket/products/:idProduct/blacklist", async (req, res, next) => {
+  try {
+    const id = Number(req.params.idProduct);
+    if (!Number.isInteger(id)) {
+      res.status(400).json({ error: "idProduct must be an integer" });
+      return;
+    }
+    const product = await prisma.cardmarketProduct.findUnique({ where: { idProduct: id } });
+    if (!product) {
+      res.status(404).json({ error: "product not found" });
+      return;
+    }
+    const item = await prisma.cardmarketBlacklistItem.upsert({
+      where: { idProduct: id },
+      create: { idProduct: id },
+      update: {},
+    });
+    res.json({ id: String(item.id), idProduct: item.idProduct });
+  } catch (err) {
+    next(err);
+  }
+});
+
+cardmarketRouter.delete("/cardmarket/products/:idProduct/blacklist", async (req, res, next) => {
+  try {
+    const id = Number(req.params.idProduct);
+    if (!Number.isInteger(id)) {
+      res.status(400).json({ error: "idProduct must be an integer" });
+      return;
+    }
+    try {
+      await prisma.cardmarketBlacklistItem.delete({ where: { idProduct: id } });
+    } catch (err) {
+      if ((err as { code?: string }).code === "P2025") {
+        res.status(204).end();
+        return;
+      }
+      throw err;
+    }
+    res.status(204).end();
   } catch (err) {
     next(err);
   }

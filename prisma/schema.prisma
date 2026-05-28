@@ -239,6 +239,7 @@ model CardmarketProduct {
   snapshots    CardmarketPriceSnapshot[]
   signals      CardmarketSignal[]
   watchlistItem CardmarketWatchlistItem?
+  blacklistItem CardmarketBlacklistItem?
 
   @@index([idCategory])
   @@index([idExpansion])
@@ -377,6 +378,18 @@ model CardmarketWatchlistItem {
   lastNotifiedRecommendation  String?
   addedAt                     DateTime @default(now())
   updatedAt                   DateTime @updatedAt
+
+  @@index([addedAt(sort: Desc)])
+}
+
+// Single-User-Blacklist: ausgeblendete Artikel. Erscheinen in keiner Artikel-
+// Liste mehr, nur in der Blacklist-Ansicht. Der Sync sammelt für sie weiterhin
+// Snapshots + Signale — nur die Anzeige wird gefiltert.
+model CardmarketBlacklistItem {
+  id        BigInt   @id @default(autoincrement())
+  idProduct Int      @unique
+  product   CardmarketProduct @relation(fields: [idProduct], references: [idProduct], onDelete: Cascade)
+  addedAt   DateTime @default(now())
 
   @@index([addedAt(sort: Desc)])
 }

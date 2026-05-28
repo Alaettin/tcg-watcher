@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   RefreshCw,
@@ -136,6 +137,9 @@ export function CardmarketPage() {
         <div>
           <h1 className="text-xl font-semibold">Cardmarket</h1>
           <SyncIndicator status={syncStatus.data ?? null} />
+          <Link to="/cardmarket/blacklist" className="text-xs text-slate-500 hover:underline">
+            Blacklist ansehen
+          </Link>
         </div>
         <button
           onClick={() => syncMutation.mutate()}
