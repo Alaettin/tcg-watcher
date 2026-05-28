@@ -81,6 +81,15 @@ export const SHOP_SEEDS: ShopSeed[] = [
     dropDayIntervalSeconds: 15,
   },
   {
+    id: "realcards",
+    displayName: "RealCards (DE)",
+    baseUrl: "https://realcards-shop.de",
+    adapterType: "shopify",
+    enabled: true,
+    pollIntervalSeconds: 120,
+    dropDayIntervalSeconds: 10,
+  },
+  {
     id: "smyths-toys",
     displayName: "Smyths Toys (DE)",
     baseUrl: "https://www.smythstoys.com/de/de-de",
