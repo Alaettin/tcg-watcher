@@ -1,4 +1,4 @@
-import { Queue, Worker, type Job, type JobsOptions } from "bullmq";
+import { Queue, Worker, type Job } from "bullmq";
 import { prisma } from "../lib/prisma.js";
 import { logger } from "../lib/logger.js";
 import { createRedisConnection } from "./redis.js";
@@ -20,6 +20,10 @@ const HEARTBEAT_QUEUE = "heartbeat";
 
 interface ShopRunJob {
   shopId: string;
+  // Manuell getriggerte Läufe planen sich NICHT selbst neu (sonst entstünde
+  // ein zweiter Dauer-Zyklus pro Shop). Self-rescheduling gilt nur für
+  // automatisch geplante Jobs.
+  manual?: boolean;
 }
 
 const sharedQueues: Map<ShopFamily, Queue<ShopRunJob>> = new Map();
@@ -92,9 +96,9 @@ export async function resetAllQueues(): Promise<{ obliterated: string[] }> {
       logger.warn({ err: error, queue: q.name }, "queue obliterate failed");
     }
   }
-  // Immediately reconcile so the repeatables are back in place — otherwise
+  // Immediately reconcile so each shop has its circulating job back — otherwise
   // the next 60s reconcile-tick would have to do it.
-  await reconcileRepeatables();
+  await reconcileSchedule();
   return { obliterated };
 }
 
@@ -104,7 +108,7 @@ export async function triggerShopNow(shopId: string): Promise<string> {
   const queue = getQueueFor(familyOf(shop));
   const job = await queue.add(
     "shop-run",
-    { shopId },
+    { shopId, manual: true },
     {
       jobId: `manual-${shopId}-${Date.now()}`,
       removeOnComplete: { count: 20 },
@@ -153,15 +157,41 @@ export async function cancelShopRuns(shopId: string): Promise<{ cancelled: numbe
 }
 
 async function jobHandler(job: Job<ShopRunJob>) {
-  const result = await runShop(job.data.shopId);
-  if (result.boostWorthyEvents > 0) {
-    triggerCascadeBoost();
-    logger.info(
-      { events: result.boostWorthyEvents, shopId: result.shopId },
-      "cascade boost triggered (NEW_LISTING/RESTOCK)",
-    );
+  try {
+    const result = await runShop(job.data.shopId);
+    if (result.boostWorthyEvents > 0) {
+      triggerCascadeBoost();
+      logger.info(
+        { events: result.boostWorthyEvents, shopId: result.shopId },
+        "cascade boost triggered (NEW_LISTING/RESTOCK)",
+      );
+    }
+    return result;
+  } finally {
+    // Self-rescheduling: den nächsten Lauf dieses Shops erst NACH Abschluss
+    // einplanen → pro Shop zirkuliert immer nur ein Job, die Queue kann nicht
+    // überlaufen. Manuelle Einmal-Trigger ausgenommen.
+    if (!job.data.manual) {
+      await scheduleNext(job.data.shopId).catch((err) =>
+        logger.error({ err, shopId: job.data.shopId }, "scheduleNext failed"),
+      );
+    }
   }
-  return result;
+}
+
+// Plant den nächsten Lauf eines Shops als verzögerten Job ein. Delay =
+// aktuelles (ggf. Drop-Day-geboostetes) Intervall. Disabled/gelöschte Shops
+// werden nicht neu eingeplant.
+async function scheduleNext(shopId: string): Promise<void> {
+  const shop = await prisma.shop.findUnique({ where: { id: shopId } });
+  if (!shop || !shop.enabled) return;
+  const family = familyOf(shop);
+  const delayMs = getCurrentIntervalSeconds(shop) * 1000;
+  await getQueueFor(family).add(
+    "shop-run",
+    { shopId },
+    { delay: delayMs, removeOnComplete: true, removeOnFail: true },
+  );
 }
 
 export async function startScheduler(): Promise<{ stop: () => Promise<void> }> {
@@ -181,16 +211,17 @@ export async function startScheduler(): Promise<{ stop: () => Promise<void> }> {
   const slowQueue = getQueueFor("slow");
   const heartbeatQueue = new Queue(HEARTBEAT_QUEUE, { connection: createRedisConnection() });
 
-  // Verwaiste Jobs aus früheren, nicht sauber beendeten Worker-Prozessen
-  // wegräumen. Da die App single-instance ist, läuft beim Start KEIN
-  // legitimer Worker — jeder `active`-Job ist also ein Zombie eines
-  // SIGKILL-beendeten Deploys (sonst zeigt das Dashboard "5× Thalia läuft").
+  // Harter Reset beider Shop-Queues beim Start. Single-instance: beim Boot
+  // läuft kein legitimer Worker, also ist alles (active-Zombies, der
+  // aufgestaute waiting-Backlog UND die alten fixen Repeatable-Definitionen)
+  // Altlast. obliterate räumt alles weg; danach bootstrappen wir frisch je
+  // einen self-rescheduling Job pro Shop. Das beendet sowohl die
+  // "5× Thalia"-Phantome als auch den waiting-Überlauf.
   for (const q of [fastQueue, slowQueue]) {
     try {
-      await q.clean(0, 10_000, "active");
-      await q.clean(0, 10_000, "wait");
+      await q.obliterate({ force: true });
     } catch (error) {
-      logger.warn({ err: error, queue: q.name }, "startup orphan-job cleanup failed");
+      logger.warn({ err: error, queue: q.name }, "startup queue obliterate failed");
     }
   }
 
@@ -242,7 +273,7 @@ export async function startScheduler(): Promise<{ stop: () => Promise<void> }> {
     { connection: createRedisConnection() },
   );
 
-  await reconcileRepeatables();
+  await reconcileSchedule();
 
   await heartbeatQueue.add(
     "tick",
@@ -267,7 +298,7 @@ export async function startScheduler(): Promise<{ stop: () => Promise<void> }> {
   );
 
   const reconcileTimer = setInterval(() => {
-    reconcileRepeatables().catch((err) =>
+    reconcileSchedule().catch((err) =>
       logger.error({ err }, "scheduler reconcile failed"),
     );
   }, 60_000);
@@ -292,48 +323,55 @@ export async function startScheduler(): Promise<{ stop: () => Promise<void> }> {
   };
 }
 
-async function reconcileRepeatables(): Promise<void> {
-  const shops = await prisma.shop.findMany({ where: { enabled: true } });
-  const desired = new Map<string, { every: number; family: ShopFamily }>();
-  for (const shop of shops) {
-    const seconds = getCurrentIntervalSeconds(shop);
-    desired.set(shop.id, { every: seconds * 1000, family: familyOf(shop) });
-  }
+// Sicherheitsnetz (alle 60s + beim Boot): stellt sicher, dass jeder enabled
+// Shop GENAU einen zirkulierenden Job hat. Im Normalbetrieb sorgt das
+// Self-Rescheduling (scheduleNext nach jedem Lauf) dafür; reconcileSchedule
+// heilt nur Lücken (nach Boot, Cancel, Crash) und räumt Jobs disabled/falsch
+// einsortierter Shops weg. Keine fixen repeat:{every} mehr → kein Überlauf.
+async function reconcileSchedule(): Promise<void> {
+  const enabledShops = await prisma.shop.findMany({ where: { enabled: true } });
+  const enabledById = new Map(enabledShops.map((s) => [s.id, s]));
+
+  const presentByFamily: Record<ShopFamily, Set<string>> = {
+    fast: new Set(),
+    slow: new Set(),
+  };
 
   for (const family of ["fast", "slow"] as ShopFamily[]) {
     const queue = getQueueFor(family);
-    const existing = await queue.getRepeatableJobs();
-    for (const job of existing) {
-      if (job.name !== "shop-run") continue;
-      const shopId = job.id ?? "";
-      const target = desired.get(shopId);
-      const currentEvery = job.every != null ? Number(job.every) : NaN;
-      // remove if shop disabled, family changed, or interval changed
-      if (!target || target.family !== family || target.every !== currentEvery) {
-        await queue.removeRepeatableByKey(job.key);
+    const jobs = [
+      ...(await queue.getWaiting()),
+      ...(await queue.getDelayed()),
+      ...(await queue.getActive()),
+    ];
+    for (const job of jobs) {
+      const shopId = job.data?.shopId;
+      if (!shopId) continue;
+      const shop = enabledById.get(shopId);
+      // Job eines disabled Shops ODER in der falschen Family-Queue (adapterType
+      // geändert) → entfernen. (Aktive/gelockte Jobs lassen sich nicht
+      // entfernen — egal, sie laufen aus und planen sich korrekt neu.)
+      if (!shop || familyOf(shop) !== family) {
+        await job.remove().catch(() => {});
+        continue;
       }
+      presentByFamily[family].add(shopId);
     }
   }
 
-  // Re-snapshot what's now present after cleanup, then add missing ones
-  const present = new Set<string>();
-  for (const family of ["fast", "slow"] as ShopFamily[]) {
-    const refreshed = await getQueueFor(family).getRepeatableJobs();
-    for (const j of refreshed) {
-      if (j.name === "shop-run" && j.id) present.add(j.id);
-    }
-  }
-
-  for (const [shopId, opts] of desired.entries()) {
-    if (present.has(shopId)) continue;
-    const queue = getQueueFor(opts.family);
-    const jobOpts: JobsOptions = {
-      repeat: { every: opts.every },
-      jobId: shopId,
-      removeOnComplete: { count: 50 },
-      removeOnFail: { count: 50 },
-    };
-    await queue.add("shop-run", { shopId }, jobOpts);
-    logger.info({ shopId, everyMs: opts.every, family: opts.family }, "shop scheduled");
+  // Fehlende enabled Shops einplanen — gestaffelt, um beim Boot keinen
+  // Thundering-Herd zu erzeugen.
+  let stagger = 0;
+  for (const shop of enabledShops) {
+    const family = familyOf(shop);
+    if (presentByFamily[family].has(shop.id)) continue;
+    const delayMs = stagger * 1500;
+    stagger++;
+    await getQueueFor(family).add(
+      "shop-run",
+      { shopId: shop.id },
+      { delay: delayMs, removeOnComplete: true, removeOnFail: true },
+    );
+    logger.info({ shopId: shop.id, family, delayMs }, "shop scheduled");
   }
 }
