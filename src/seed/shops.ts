@@ -72,6 +72,15 @@ export const SHOP_SEEDS: ShopSeed[] = [
     dropDayIntervalSeconds: 15,
   },
   {
+    id: "comicplanet",
+    displayName: "Comicplanet (DE)",
+    baseUrl: "https://www.comicplanet.de",
+    adapterType: "shopware",
+    enabled: true,
+    pollIntervalSeconds: 180,
+    dropDayIntervalSeconds: 15,
+  },
+  {
     id: "smyths-toys",
     displayName: "Smyths Toys (DE)",
     baseUrl: "https://www.smythstoys.com/de/de-de",
