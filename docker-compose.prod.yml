@@ -61,6 +61,9 @@ services:
     image: pokemon-watcher:latest
     container_name: pokemon-watcher-app
     restart: unless-stopped
+    # Genug Zeit für den gebündelten Worker-Shutdown, bevor Docker SIGKILLt —
+    # verhindert verwaiste "active"-Jobs (Phantom-"läuft"-Anzeige).
+    stop_grace_period: 30s
     depends_on:
       postgres:
         condition: service_healthy

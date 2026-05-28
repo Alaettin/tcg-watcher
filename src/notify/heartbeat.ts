@@ -24,7 +24,16 @@ export interface CurrentlyRunning {
   family: ShopFamily;
   startedAt: string | null;
   elapsedMs: number;
+  jobId: string | null;
 }
+
+// Lock-Dauer pro Familie (muss zu queue.ts passen). Ein "active"-Job, der
+// länger als die Lock-Dauer läuft, ist nachweislich verwaist (der Lock wäre
+// abgelaufen) — solche Zombies nicht als "läuft" anzeigen.
+const FAMILY_STALE_AFTER_MS: Record<ShopFamily, number> = {
+  fast: 5 * 60_000,
+  slow: 10 * 60_000,
+};
 
 export interface RecentRun {
   shopId: string;
@@ -90,13 +99,18 @@ async function collectCurrentlyRunning(
         const meta = shopMap.get(shopId);
         if (!meta) return null;
         const startedAt = job.processedOn ?? null;
+        const family = familyOf({ adapterType: meta.adapterType });
+        const elapsedMs = startedAt ? now - startedAt : 0;
+        // Verwaiste Zombies (Lock längst abgelaufen) nicht als "läuft" zeigen.
+        if (elapsedMs > FAMILY_STALE_AFTER_MS[family]) return null;
         return {
           shopId,
           displayName: meta.displayName,
           adapterType: meta.adapterType,
-          family: familyOf({ adapterType: meta.adapterType }),
+          family,
           startedAt: startedAt ? new Date(startedAt).toISOString() : null,
-          elapsedMs: startedAt ? now - startedAt : 0,
+          elapsedMs,
+          jobId: job.id != null ? String(job.id) : null,
         } as CurrentlyRunning;
       })
       .filter((x): x is CurrentlyRunning => x !== null);

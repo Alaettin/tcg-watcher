@@ -172,6 +172,7 @@ export interface CurrentlyRunning {
   family: ShopFamily;
   startedAt: string | null;
   elapsedMs: number;
+  jobId: string | null;
 }
 
 export interface RecentRun {

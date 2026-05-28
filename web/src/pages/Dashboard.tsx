@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, AlertTriangle, Box, Loader2, Pause, Play, Radio, RefreshCw, Send, Settings, Trash2, Zap } from "lucide-react";
+import { Activity, AlertTriangle, Box, Loader2, Pause, Play, Radio, RefreshCw, Send, Settings, Trash2, X, Zap } from "lucide-react";
 import clsx from "clsx";
 import { api, useEventStream } from "../lib/api";
 import { ago } from "../lib/format";
@@ -251,6 +251,12 @@ function ShopHealthStat({
 }
 
 function RunningSection({ runs }: { runs: CurrentlyRunning[] }) {
+  const qc = useQueryClient();
+  const cancel = useMutation({
+    mutationFn: (shopId: string) =>
+      api.post<{ shopId: string; cancelled: number }>(`/api/shops/${shopId}/cancel`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["heartbeat"] }),
+  });
   return (
     <section>
       <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-2">
@@ -283,6 +289,15 @@ function RunningSection({ runs }: { runs: CurrentlyRunning[] }) {
                   <span>läuft seit {Math.floor(r.elapsedMs / 1000)}s</span>
                 </div>
               </div>
+              <button
+                onClick={() => cancel.mutate(r.shopId)}
+                disabled={cancel.isPending}
+                title="Diesen Lauf abbrechen"
+                aria-label="Abbrechen"
+                className="shrink-0 p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 disabled:opacity-40"
+              >
+                <X size={15} />
+              </button>
             </div>
           ))}
         </div>

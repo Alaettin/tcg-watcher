@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
-import { triggerShopNow } from "../../scheduler/queue.js";
+import { triggerShopNow, cancelShopRuns } from "../../scheduler/queue.js";
 import { getCurrentIntervalSeconds } from "../../scheduler/dropDay.js";
 import { familyOf } from "../../scheduler/adapterFamily.js";
 import { invalidateSetsForShopCache } from "../../matcher/setMatcher.js";
@@ -85,6 +85,15 @@ shopsRouter.post("/shops/:id/trigger", async (req, res, next) => {
     }
     const jobId = await triggerShopNow(shop.id);
     res.json({ jobId, shopId: shop.id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+shopsRouter.post("/shops/:id/cancel", async (req, res, next) => {
+  try {
+    const result = await cancelShopRuns(req.params.id);
+    res.json({ shopId: req.params.id, ...result });
   } catch (err) {
     next(err);
   }

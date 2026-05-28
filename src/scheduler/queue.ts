@@ -114,6 +114,44 @@ export async function triggerShopNow(shopId: string): Promise<string> {
   return String(job.id ?? "");
 }
 
+// Bricht laufende/wartende Single-Runs eines Shops ab. Wiederkehrende
+// (repeatable) Jobs bleiben erhalten — der Shop wird beim nächsten Tick wieder
+// normal gepollt; wir killen nur den aktuell hängenden Lauf.
+export async function cancelShopRuns(shopId: string): Promise<{ cancelled: number }> {
+  let cancelled = 0;
+  for (const q of allQueues()) {
+    // 1. Wartende/verzögerte Einzel-Jobs entfernen (verhindert Start).
+    const pending = [...(await q.getWaiting()), ...(await q.getDelayed())];
+    for (const job of pending) {
+      if (job.data?.shopId !== shopId) continue;
+      if (job.repeatJobKey) continue; // den Repeatable-Trigger nicht anfassen
+      try {
+        await job.remove();
+        cancelled++;
+      } catch {
+        /* race: schon weg */
+      }
+    }
+    // 2. Aktive Jobs: remove versuchen — klappt bei verwaisten/Phantom-Jobs
+    //    sofort. Bei echtem gelocktem Lauf wirft remove → für die slow-Family
+    //    den Browser schließen, das killt die wedged Playwright-Seite (slow
+    //    läuft mit concurrency 1, betrifft also nur diesen einen Lauf).
+    for (const job of await q.getActive()) {
+      if (job.data?.shopId !== shopId) continue;
+      try {
+        await job.remove();
+        cancelled++;
+      } catch {
+        if (q.name === QUEUE_NAME_SLOW) {
+          await closeBrowser().catch(() => {});
+          cancelled++;
+        }
+      }
+    }
+  }
+  return { cancelled };
+}
+
 async function jobHandler(job: Job<ShopRunJob>) {
   const result = await runShop(job.data.shopId);
   if (result.boostWorthyEvents > 0) {
@@ -142,6 +180,19 @@ export async function startScheduler(): Promise<{ stop: () => Promise<void> }> {
   const fastQueue = getQueueFor("fast");
   const slowQueue = getQueueFor("slow");
   const heartbeatQueue = new Queue(HEARTBEAT_QUEUE, { connection: createRedisConnection() });
+
+  // Verwaiste Jobs aus früheren, nicht sauber beendeten Worker-Prozessen
+  // wegräumen. Da die App single-instance ist, läuft beim Start KEIN
+  // legitimer Worker — jeder `active`-Job ist also ein Zombie eines
+  // SIGKILL-beendeten Deploys (sonst zeigt das Dashboard "5× Thalia läuft").
+  for (const q of [fastQueue, slowQueue]) {
+    try {
+      await q.clean(0, 10_000, "active");
+      await q.clean(0, 10_000, "wait");
+    } catch (error) {
+      logger.warn({ err: error, queue: q.name }, "startup orphan-job cleanup failed");
+    }
+  }
 
   const fastWorker = new Worker<ShopRunJob>(
     QUEUE_NAME_FAST,
@@ -224,9 +275,15 @@ export async function startScheduler(): Promise<{ stop: () => Promise<void> }> {
   return {
     async stop() {
       clearInterval(reconcileTimer);
-      await fastWorker.close();
-      await slowWorker.close();
-      await heartbeatWorker.close();
+      // Force-Close: nicht auf laufende Jobs warten (ein Playwright-Run kann
+      // bis ~220s dauern; Docker killt nach der Grace-Period). Der dabei
+      // abgebrochene Job wird verwaist — das Startup-Cleanup oben putzt ihn
+      // beim nächsten Boot weg. So bleibt der Deploy schnell.
+      await Promise.all([
+        fastWorker.close(true),
+        slowWorker.close(true),
+        heartbeatWorker.close(true),
+      ]);
       await Promise.all([fastQueue.close(), slowQueue.close()]);
       sharedQueues.clear();
       await heartbeatQueue.close();
