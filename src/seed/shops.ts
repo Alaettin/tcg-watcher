@@ -9,6 +9,7 @@ interface ShopSeed {
     | "shopify"
     | "jtl"
     | "shopware"
+    | "woocommerce"
     | "smyths"
     | "mediamarkt"
     | "thalia"
@@ -94,6 +95,15 @@ export const SHOP_SEEDS: ShopSeed[] = [
     displayName: "Nerdbank (DE)",
     baseUrl: "https://nerdbank.de",
     adapterType: "shopify",
+    enabled: true,
+    pollIntervalSeconds: 120,
+    dropDayIntervalSeconds: 10,
+  },
+  {
+    id: "keepseven",
+    displayName: "KeepSeven (DE)",
+    baseUrl: "https://keepseven.de",
+    adapterType: "woocommerce",
     enabled: true,
     pollIntervalSeconds: 120,
     dropDayIntervalSeconds: 10,

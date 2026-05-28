@@ -3,6 +3,7 @@ import type { ShopAdapter } from "./ShopAdapter.js";
 import { createShopifyAdapter } from "./shopify-generic.js";
 import { createJtlAdapter } from "./jtl-generic.js";
 import { createShopwareAdapter } from "./shopware-generic.js";
+import { createWooCommerceAdapter } from "./woocommerce-generic.js";
 import { createSmythsAdapter } from "./smyths.js";
 import { createMediaMarktAdapter } from "./mediamarkt.js";
 import { createThaliaAdapter } from "./thalia.js";
@@ -22,6 +23,8 @@ export function createAdapterForShop(shop: Shop): ShopAdapter | null {
       return createJtlAdapter(shop.id, shop.baseUrl);
     case "shopware":
       return createShopwareAdapter(shop.id, shop.baseUrl);
+    case "woocommerce":
+      return createWooCommerceAdapter(shop.id, shop.baseUrl);
     case "smyths":
       return createSmythsAdapter(shop.id);
     case "mediamarkt":
